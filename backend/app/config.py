@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "admin123"
 
     DATABASE_URL: str  # Supabase PostgreSQL connection URL
+    FRESHDESK_API_KEY: str = "_TDqN38_v7VaWOrsygmR"
+    FRESHDESK_DOMAIN: str = "viewlift.freshdesk.com"
 
 
 settings = Settings()

@@ -18,8 +18,90 @@ const STEPS = [
   { n: 5, text: 'Upload the downloaded CSV in the area below' },
 ]
 
-function GroupCard({ group, index }) {
+const TREND_CONFIG = {
+  high:   { label: 'High',   cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
+  medium: { label: 'Medium', cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300' },
+  low:    { label: 'Low',    cls: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' },
+}
+
+function TrackerGroupCard({ tg, trackerDetails }) {
   const [open, setOpen] = useState(true)
+  const details = trackerDetails?.[tg.tracker_id] || {}
+
+  return (
+    <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:opacity-90 transition-opacity"
+      >
+        <span className="flex-shrink-0 px-2 py-0.5 rounded text-xs font-bold bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200">
+          TRACKER
+        </span>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
+            #{tg.tracker_id} — {tg.subject}
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Status: {tg.status} · {tg.ticket_ids.length} ticket{tg.ticket_ids.length !== 1 ? 's' : ''} from today linked to this tracker
+          </p>
+        </div>
+        <a
+          href={tg.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className="flex-shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline mr-2"
+        >
+          Open ↗
+        </a>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-5 pb-4 pt-1 border-t border-red-200 dark:border-red-700 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tickets from today's CSV</p>
+              <div className="flex flex-wrap gap-1">
+                {tg.ticket_ids.map(id => (
+                  <a
+                    key={id}
+                    href={`https://viewlift.freshdesk.com/a/tickets/${id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-red-200 dark:border-red-600 text-xs font-mono text-red-700 dark:text-red-300 hover:underline"
+                  >
+                    #{id}
+                  </a>
+                ))}
+              </div>
+            </div>
+            {tg.tags?.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tracker Tags</p>
+                <div className="flex flex-wrap gap-1">
+                  {tg.tags.map(tag => (
+                    <span key={tag} className="inline-block px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-xs text-red-700 dark:text-red-300">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GroupCard({ group, index, trackerDetails }) {
+  const [open, setOpen] = useState(true)
+  const trackedSet = new Set(group.tracked_ticket_ids || [])
+  const trend = TREND_CONFIG[group.trend] || TREND_CONFIG.low
+  const hasTrackers = group.tracker_ids?.length > 0
 
   const colors = [
     'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700',
@@ -49,12 +131,27 @@ function GroupCard({ group, index }) {
           {index + 1}
         </span>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{group.title}</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{group.title}</h3>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${trend.cls}`}>{trend.label}</span>
+            {hasTrackers && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                🔗 Tracker
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{group.description}</p>
         </div>
-        <span className="flex-shrink-0 text-xs font-medium text-gray-500 dark:text-gray-400 mr-2">
-          {group.ticket_ids?.length || 0} ticket{(group.ticket_ids?.length || 0) !== 1 ? 's' : ''}
-        </span>
+        <div className="flex-shrink-0 flex items-center gap-2 mr-2">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            {group.ticket_ids?.length || 0} ticket{(group.ticket_ids?.length || 0) !== 1 ? 's' : ''}
+          </span>
+          {trackedSet.size > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 font-medium">
+              {trackedSet.size} logged
+            </span>
+          )}
+        </div>
         <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -64,14 +161,48 @@ function GroupCard({ group, index }) {
         <div className="px-5 pb-5 pt-1 space-y-4 border-t border-inherit">
           <p className="text-sm text-gray-700 dark:text-gray-300">{group.description}</p>
 
+          {/* Linked trackers */}
+          {hasTrackers && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Linked Trackers</p>
+              <div className="flex flex-col gap-1">
+                {group.tracker_ids.map(trId => {
+                  const tr = trackerDetails?.[trId]
+                  return (
+                    <a
+                      key={trId}
+                      href={`https://viewlift.freshdesk.com/a/tickets/${trId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-xs hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+                    >
+                      <span className="font-mono text-red-700 dark:text-red-300">#{trId}</span>
+                      <span className="text-gray-700 dark:text-gray-300">{tr?.subject || 'Tracker'}</span>
+                      <span className="ml-auto text-gray-400">{tr?.status}</span>
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {group.ticket_ids?.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tickets</p>
                 <div className="flex flex-wrap gap-1">
                   {group.ticket_ids.map(id => (
-                    <span key={id} className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs font-mono text-gray-700 dark:text-gray-300">
+                    <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono border ${
+                      trackedSet.has(id)
+                        ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300'
+                        : 'bg-white border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                    }`}>
                       #{id}
+                      {trackedSet.has(id) && (
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -83,9 +214,7 @@ function GroupCard({ group, index }) {
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Devices</p>
                 <div className="flex flex-wrap gap-1">
                   {group.devices.map(d => (
-                    <span key={d} className="inline-block px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">
-                      {d}
-                    </span>
+                    <span key={d} className="inline-block px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">{d}</span>
                   ))}
                 </div>
               </div>
@@ -96,9 +225,7 @@ function GroupCard({ group, index }) {
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Clients</p>
                 <div className="flex flex-wrap gap-1">
                   {group.clients.map(cl => (
-                    <span key={cl} className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">
-                      {cl}
-                    </span>
+                    <span key={cl} className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">{cl}</span>
                   ))}
                 </div>
               </div>
@@ -109,9 +236,7 @@ function GroupCard({ group, index }) {
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tags</p>
                 <div className="flex flex-wrap gap-1">
                   {group.tags.map(tag => (
-                    <span key={tag} className="inline-block px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300">
-                      {tag}
-                    </span>
+                    <span key={tag} className="inline-block px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-xs text-gray-600 dark:text-gray-300">{tag}</span>
                   ))}
                 </div>
               </div>
@@ -143,7 +268,7 @@ export default function DailyUpdate() {
       form.append('file', file)
       const res = await client.post('/daily-update/analyze', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 120000,
+        timeout: 180000,
       })
       setResult(res.data)
       toast.success('Analysis complete')
@@ -167,15 +292,13 @@ export default function DailyUpdate() {
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Daily Update</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Grouped analysis of today's Freshdesk tickets
+            Grouped trend analysis of today's Freshdesk tickets, including active trackers
           </p>
         </div>
 
         {/* Instructions */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5 mb-6">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">
-            How to generate the report
-          </h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">How to generate the report</h3>
           <ol className="space-y-3">
             {STEPS.map(step => (
               <li key={step.n} className="flex gap-3">
@@ -189,7 +312,7 @@ export default function DailyUpdate() {
                       {Object.entries(step.fields).map(([section, fields]) => (
                         <div key={section} className="text-xs">
                           <span className="font-medium text-gray-600 dark:text-gray-400">{section}: </span>
-                          <span className="text-gray-500 dark:text-gray-500 font-mono">{fields}</span>
+                          <span className="text-gray-500 font-mono">{fields}</span>
                         </div>
                       ))}
                     </div>
@@ -200,16 +323,14 @@ export default function DailyUpdate() {
           </ol>
         </div>
 
-        {/* Upload area */}
+        {/* Upload */}
         <div
           onDrop={handleDrop}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onClick={() => inputRef.current?.click()}
           className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg py-10 cursor-pointer transition-colors mb-6 ${
-            dragOver
-              ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+            dragOver ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800'
           }`}
         >
           <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files[0] && processFile(e.target.files[0])} />
@@ -220,7 +341,7 @@ export default function DailyUpdate() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
               <p className="text-sm text-blue-600 font-medium">Analyzing {fileName}...</p>
-              <p className="text-xs text-gray-400 mt-1">This may take up to 30 seconds</p>
+              <p className="text-xs text-gray-400 mt-1">Fetching tracker info from Freshdesk. This may take up to 60 seconds.</p>
             </>
           ) : (
             <>
@@ -239,25 +360,64 @@ export default function DailyUpdate() {
         {result && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-gray-800 dark:text-white">
-                {result.groups?.length || 0} issue group{(result.groups?.length || 0) !== 1 ? 's' : ''} found
-                <span className="text-sm font-normal text-gray-400 ml-2">({result.total_tickets} tickets analyzed)</span>
-              </h3>
-              <button
-                onClick={() => { setResult(null); setFileName(null) }}
-                className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-              >
+              <div>
+                <h3 className="text-base font-semibold text-gray-800 dark:text-white">
+                  {result.groups?.length || 0} issue group{(result.groups?.length || 0) !== 1 ? 's' : ''} found
+                  <span className="text-sm font-normal text-gray-400 ml-2">({result.total_tickets} tickets analyzed)</span>
+                </h3>
+                <div className="flex gap-3 mt-1">
+                  {result.total_with_freshdesk_tracker > 0 && (
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      🔗 {result.total_with_freshdesk_tracker} ticket{result.total_with_freshdesk_tracker !== 1 ? 's' : ''} linked to a Freshdesk tracker
+                    </p>
+                  )}
+                  {result.total_tracked > 0 && (
+                    <p className="text-xs text-green-600 dark:text-green-400">
+                      ✓ {result.total_tracked} logged by Tampermonkey
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => { setResult(null); setFileName(null) }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                 Clear
               </button>
             </div>
+
+            {/* Active Trackers section */}
+            {result.tracker_groups?.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-red-700 dark:text-red-400 uppercase tracking-wide mb-3">
+                  🔗 Active Trackers ({result.tracker_groups.length})
+                </h4>
+                <div className="space-y-3">
+                  {result.tracker_groups.map(tg => (
+                    <TrackerGroupCard key={tg.tracker_id} tg={tg} trackerDetails={result.tracker_details} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Issue groups */}
+            <div className="mb-3">
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
+                Issue Groups
+              </h4>
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 mb-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-200 inline-block" /> High trend (3+ tickets)</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-200 inline-block" /> Medium (2 tickets)</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-200 inline-block" /> ✓ Logged by agent</span>
+              <span className="flex items-center gap-1"><span className="text-red-500">🔗</span> Has Freshdesk tracker</span>
+            </div>
+
             <div className="space-y-3">
               {result.groups?.map((group, i) => (
-                <GroupCard key={i} group={group} index={i} />
+                <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} />
               ))}
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-4">
-              Source: {result.filename}
-            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-4">Source: {result.filename}</p>
           </div>
         )}
       </div>

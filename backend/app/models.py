@@ -1,5 +1,6 @@
 # backend/app/models.py
 from datetime import datetime
+from sqlalchemy.sql import func
 from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, LargeBinary, ForeignKey, Boolean, Float
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -39,6 +40,9 @@ class User(Base):
     daily_goal = Column(Integer, default=35, nullable=False)
     monthly_cost = Column(Float, default=0.0, nullable=False, server_default="0.0")
     monthly_cost_month = Column(String(7), nullable=True)  # YYYY-MM
+    api_key = Column(String, unique=True, nullable=True)
+    ticket_logs = relationship("TicketLog", back_populates="user")
+    daily_update_reports = relationship("DailyUpdateReport", back_populates="user")
 
     responses = relationship("ResponseHistory", back_populates="user")
 
@@ -87,3 +91,27 @@ class ResponseHistory(Base):
 
     user = relationship("User", back_populates="responses")
     platform = relationship("Platform", back_populates="responses")
+
+
+class TicketLog(Base):
+    __tablename__ = "ticket_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    ticket_url = Column(String, nullable=False)
+    worked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="ticket_logs")
+
+class DailyUpdateReport(Base):
+    __tablename__ = "daily_update_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    filename = Column(String, nullable=True)
+    total_tickets = Column(Integer, default=0)
+    total_tracked = Column(Integer, default=0)
+    result_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="daily_update_reports")
