@@ -293,7 +293,8 @@ TICKET DATA (use ONLY what is explicitly stated here — do NOT invent any infor
 {tickets_text}
 
 INSTRUCTIONS:
-- Group tickets that share the same root problem or issue type
+- Group tickets by BOTH client AND problem type — each group must contain tickets from ONE client only
+- If the same problem affects multiple clients, create a separate group for each client
 - Each ticket must belong to exactly one group
 - For each group extract strictly from the data above:
   * title: short problem label (e.g. "Login Issues", "Video Playback Error")
@@ -302,7 +303,7 @@ INSTRUCTIONS:
   * clients: list of unique client/contact names (from "Client=" field)
   * tags: combined unique tags from all tickets in this group (from "Tags=[...]" field, split by comma)
   * devices: device names ONLY if explicitly mentioned in Subject or Desc (e.g. iOS, Android, Roku, FireTV, Web, Samsung TV) — empty list if none mentioned
-  * platforms: unique platform names from the "Platform=" field for tickets in this group — empty list if none
+  * platforms: unique platform names from the "Platform=" field for tickets in this group — empty list [] if none, never use "None" as a value
   * trend: volume indicator — "high" if 3 or more tickets, "medium" if exactly 2, "low" if 1
 
 STRICT RULES:
