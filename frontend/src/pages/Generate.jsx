@@ -201,6 +201,7 @@ export default function Generate() {
   }
 
   const handleClear = () => {
+    setAgentNotes("")
     setCustomerMessage('')
     setScreenshots([])
     setParsedInfo(null)
