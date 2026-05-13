@@ -559,24 +559,6 @@ export default function DailyUpdate() {
                 Issue Groups
               </h4>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-400 dark:text-gray-500">Filter:</span>
-                {['high', 'medium', 'low'].map(level => (
-                  <button
-                    key={level}
-                    onClick={() => setFilterTrend(filterTrend === level ? null : level)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                      filterTrend === level
-                        ? level === 'high'
-                          ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700'
-                          : level === 'medium'
-                            ? 'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700'
-                            : 'bg-gray-200 text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500'
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'
-                    }`}
-                  >
-                    {level.charAt(0).toUpperCase() + level.slice(1)}
-                  </button>
-                ))}
                 <button
                   onClick={() => setFilterTracker(!filterTracker)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
@@ -587,9 +569,9 @@ export default function DailyUpdate() {
                 >
                   🔗 Has Tracker
                 </button>
-                {(filterTrend || filterTracker) && (
+                {filterTracker && (
                   <button
-                    onClick={() => { setFilterTrend(null); setFilterTracker(false) }}
+                    onClick={() => setFilterTracker(false)}
                     className="px-2 py-1 rounded-full text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 transition-colors"
                   >
                     Clear
@@ -607,7 +589,6 @@ export default function DailyUpdate() {
 
             {(() => {
               const filtered = (result.groups || []).filter(g => {
-                if (filterTrend && g.trend !== filterTrend) return false
                 if (filterTracker && (!g.tracker_ids || g.tracker_ids.length === 0)) return false
                 return true
               })
