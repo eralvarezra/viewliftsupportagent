@@ -15,10 +15,12 @@ function fileToBase64(file) {
 
 export default function Generate() {
   const [customerMessage, setCustomerMessage] = useState('')
-  const [screenshot, setScreenshot] = useState(null) // { base64, mediaType, previewUrl }
+  const [screenshots, setScreenshots] = useState([]) // [{ base64, mediaType, previewUrl }]
   const [parsedInfo, setParsedInfo] = useState(null)
   const [generatedResponse, setGeneratedResponse] = useState('')
   const [nextSteps, setNextSteps] = useState(null)
+  const [botNotes, setBotNotes] = useState(null)
+  const [agentNotes, setAgentNotes] = useState("")
   const [needsVerification, setNeedsVerification] = useState(false)
   const [faqSources, setFaqSources] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -57,19 +59,21 @@ export default function Generate() {
 
   useEffect(() => {
     setCustomerMessage('')
-    setScreenshot(null)
+    setScreenshots([])
     setParsedInfo(null)
     setGeneratedResponse('')
     setNextSteps(null)
+    setBotNotes(null)
     setNeedsVerification(false)
     setFaqSources([])
+    setScreenshots([])
   }, [activePlatform?.id])
 
   const processImageFile = useCallback(async (file) => {
     if (!file.type.startsWith('image/')) { toast.error('Only image files are supported'); return }
     if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return }
     const base64 = await fileToBase64(file)
-    setScreenshot({ base64, mediaType: file.type, previewUrl: URL.createObjectURL(file) })
+    setScreenshots(prev => [...prev, { base64, mediaType: file.type, previewUrl: URL.createObjectURL(file) }])
   }, [])
 
   const handlePaste = useCallback((e) => {
@@ -79,8 +83,7 @@ export default function Generate() {
 
   const handleDrop = useCallback((e) => {
     e.preventDefault(); setDragOver(false)
-    const file = e.dataTransfer.files[0]
-    if (file) processImageFile(file)
+    Array.from(e.dataTransfer.files).forEach(file => processImageFile(file))
   }, [processImageFile])
 
   const handleAnalyzeAndGenerate = async () => {
@@ -93,20 +96,23 @@ export default function Generate() {
     setParsedInfo(null)
     setGeneratedResponse('')
     setNextSteps(null)
+    setBotNotes(null)
     setNeedsVerification(false)
     setFaqSources([])
+    setScreenshots([])
 
     try {
       const response = await client.post('/generate', {
         message: customerMessage,
         platform_id: activePlatform.id,
-        image_base64: screenshot?.base64 || null,
-        image_media_type: screenshot?.mediaType || 'image/png',
+        images: screenshots.length > 0 ? screenshots.map(s => ({ base64: s.base64, media_type: s.mediaType })) : null,
+        agent_notes: agentNotes.trim() || null,
       })
 
       setParsedInfo(response.data.parsed)
       setGeneratedResponse(response.data.response || '')
       setNextSteps(response.data.next_steps || null)
+      setBotNotes(response.data.bot_notes || null)
       setNeedsVerification(response.data.needs_verification || false)
       setFaqSources(response.data.faq_sources || [])
 
@@ -135,13 +141,14 @@ export default function Generate() {
       const response = await client.post('/generate', {
         message: customerMessage,
         platform_id: activePlatform.id,
-        image_base64: screenshot?.base64 || null,
-        image_media_type: screenshot?.mediaType || 'image/png',
+        images: screenshots.length > 0 ? screenshots.map(s => ({ base64: s.base64, media_type: s.mediaType })) : null,
+        agent_notes: agentNotes.trim() || null,
       })
 
       setParsedInfo(response.data.parsed)
       setGeneratedResponse(response.data.response || '')
       setNextSteps(response.data.next_steps || null)
+      setBotNotes(response.data.bot_notes || null)
       setNeedsVerification(response.data.needs_verification || false)
       setFaqSources(response.data.faq_sources || [])
 
@@ -195,12 +202,14 @@ export default function Generate() {
 
   const handleClear = () => {
     setCustomerMessage('')
-    setScreenshot(null)
+    setScreenshots([])
     setParsedInfo(null)
     setGeneratedResponse('')
     setNextSteps(null)
+    setBotNotes(null)
     setNeedsVerification(false)
     setFaqSources([])
+    setScreenshots([])
     toast.success('Cleared successfully')
   }
 
@@ -256,57 +265,75 @@ end_of_access: 2026-05-18`}
               className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed resize-none font-mono text-sm"
             />
 
+            {/* Agent Notes */}
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Agent Notes <span className="text-gray-400 font-normal">(optional — instructions for the bot)</span>
+              </label>
+              <textarea
+                value={agentNotes}
+                onChange={(e) => setAgentNotes(e.target.value)}
+                placeholder="e.g. Customer already tried reinstalling. Offer refund only if subscription is expired."
+                disabled={isLoading}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed resize-none text-sm"
+              />
+            </div>
+
             {/* Screenshot area */}
-            <div className="mt-4">
-              {screenshot ? (
-                <div className="relative group rounded-lg overflow-hidden border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20">
-                  <img src={screenshot.previewUrl} alt="Screenshot" className="max-h-48 w-full object-contain" />
-                  <button
-                    onClick={() => setScreenshot(null)}
-                    className="absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 text-sm transition-colors"
-                    title="Remove screenshot"
-                  >✕</button>
-                  <div className="px-3 py-1.5 text-xs text-blue-700 dark:text-blue-300 font-medium">
-                    {needsVerification
-                      ? '📷 CMS screenshot attached — click "Generate Final Response"'
-                      : '📷 Screenshot attached — Claude will analyze this'}
-                  </div>
-                </div>
-              ) : (
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                  onDragLeave={() => setDragOver(false)}
-                  className={`flex items-center justify-center border-2 border-dashed rounded-lg py-3 cursor-pointer transition-colors ${
-                    needsVerification
-                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-500'
-                      : dragOver
-                        ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                  }`}
-                  onClick={() => document.getElementById('screenshot-input').click()}
-                >
-                  <input
-                    id="screenshot-input"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => e.target.files[0] && processImageFile(e.target.files[0])}
-                  />
-                  <p className={`text-xs select-none ${needsVerification ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {needsVerification
-                      ? '📎 Upload CMS screenshot here to proceed'
-                      : <span>📷 Attach screenshot — paste, drag & drop, or click <span className="text-blue-500">(optional)</span></span>
-                    }
-                  </p>
+            <div className="mt-4 space-y-2">
+              {/* Thumbnails grid */}
+              {screenshots.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {screenshots.map((s, i) => (
+                    <div key={i} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 flex-shrink-0">
+                      <img src={s.previewUrl} alt={`Screenshot ${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setScreenshots(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 text-xs transition-colors opacity-0 group-hover:opacity-100"
+                        title="Remove"
+                      >✕</button>
+                    </div>
+                  ))}
                 </div>
               )}
+              {/* Drop zone */}
+              <div
+                onDrop={handleDrop}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                className={`flex items-center justify-center border-2 border-dashed rounded-lg py-3 cursor-pointer transition-colors ${
+                  needsVerification && screenshots.length === 0
+                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:border-amber-500'
+                    : dragOver
+                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                }`}
+                onClick={() => document.getElementById('screenshot-input').click()}
+              >
+                <input
+                  id="screenshot-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => Array.from(e.target.files).forEach(f => processImageFile(f))}
+                />
+                <p className={`text-xs select-none ${needsVerification && screenshots.length === 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-400 dark:text-gray-500'}`}>
+                  {needsVerification && screenshots.length === 0
+                    ? '📎 Upload CMS screenshot here to proceed'
+                    : screenshots.length > 0
+                      ? <span>📷 Add more — paste, drag & drop, or <span className="text-blue-500">click</span></span>
+                      : <span>📷 Attach screenshots — paste, drag & drop, or <span className="text-blue-500">click</span> (optional)</span>
+                  }
+                </p>
+              </div>
             </div>
 
             <div className="mt-4 flex justify-end">
               <button
                 onClick={handleAnalyzeAndGenerate}
-                disabled={isLoading || !customerMessage.trim() || !activePlatform || (needsVerification && !screenshot)}
+                disabled={isLoading || !customerMessage.trim() || !activePlatform || (needsVerification && screenshots.length === 0)}
                 className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? (
@@ -372,7 +399,7 @@ end_of_access: 2026-05-18`}
           </div>
 
           {/* CMS Verification Banner */}
-          {needsVerification && !screenshot && (
+          {needsVerification && screenshots.length === 0 && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-600 rounded-lg p-5">
               <div className="flex items-start gap-3 mb-3">
                 <span className="text-2xl">⚠️</span>
@@ -398,7 +425,7 @@ end_of_access: 2026-05-18`}
           )}
 
           {/* Generated Response */}
-          {(!needsVerification || screenshot) && (
+          {(!needsVerification || screenshots.length > 0) && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-800">
@@ -456,6 +483,20 @@ end_of_access: 2026-05-18`}
                 </span>
               </div>
               <pre className="text-sm text-amber-900 dark:text-amber-200 whitespace-pre-wrap font-sans leading-relaxed">{nextSteps}</pre>
+            </div>
+          )}
+
+          {/* Bot Notes Panel (internal) */}
+          {botNotes && (
+            <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🤖</span>
+                <h4 className="font-semibold text-gray-700 dark:text-gray-300">Bot Notes</h4>
+                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-600 px-2 py-0.5 rounded-full font-medium">
+                  Internal only
+                </span>
+              </div>
+              <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">{botNotes}</pre>
             </div>
           )}
 
