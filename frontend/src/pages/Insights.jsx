@@ -328,8 +328,10 @@ export default function DailyUpdate() {
     } else {
       highGroups.forEach(g => {
         const ids = (g.ticket_ids || []).map(id => '#' + id).join(', ')
-        msg += '• *' + g.label + '* — ' + (g.ticket_ids?.length || 0) + ' tickets (' + ids + ')\n'
-        if (g.summary) msg += '  _' + g.summary + '_\n'
+        msg += '• *' + g.title + '* — ' + (g.ticket_ids?.length || 0) + ' tickets\n'
+        if (g.devices?.length) msg += '  Devices: ' + g.devices.join(', ') + '\n'
+        if (g.platforms?.length) msg += '  Platforms: ' + g.platforms.join(', ') + '\n'
+        msg += '  ' + ids + '\n'
       })
     }
 
@@ -343,8 +345,10 @@ export default function DailyUpdate() {
           const td = result.tracker_details?.[tid]
           return td ? 'Tracker #' + tid + ': ' + td.subject + ' (' + td.status + ')' : 'Tracker #' + tid
         }).join(', ')
-        msg += '• *' + g.label + '* → ' + trackerInfo + '\n'
-        msg += '  Tickets: ' + ids + '\n'
+        msg += '• *' + g.title + '* (' + (g.ticket_ids?.length || 0) + ' tickets) → ' + trackerInfo + '\n'
+        if (g.devices?.length) msg += '  Devices: ' + g.devices.join(', ') + '\n'
+        if (g.platforms?.length) msg += '  Platforms: ' + g.platforms.join(', ') + '\n'
+        msg += '  ' + ids + '\n'
       })
     }
 

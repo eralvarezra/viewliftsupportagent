@@ -302,12 +302,15 @@ INSTRUCTIONS:
   * clients: list of unique client/contact names (from "Client=" field)
   * tags: combined unique tags from all tickets in this group (from "Tags=[...]" field, split by comma)
   * devices: device names ONLY if explicitly mentioned in Subject or Desc (e.g. iOS, Android, Roku, FireTV, Web, Samsung TV) — empty list if none mentioned
+  * platforms: unique platform names from the "Platform=" field for tickets in this group — empty list if none
+  * trend: volume indicator — "high" if 3 or more tickets, "medium" if exactly 2, "low" if 1
 
 STRICT RULES:
-- Only include devices, tags, clients that appear in the raw data above
+- Only include devices, tags, clients, platforms that appear in the raw data above
 - Do not add tags, devices, or names that are not present
 - ticket_ids must be integers
 - tags must be individual tag strings, not comma-separated
+- trend must be exactly "high", "medium", or "low"
 
 Return ONLY valid JSON, no markdown, no explanation:
 {{
@@ -318,7 +321,9 @@ Return ONLY valid JSON, no markdown, no explanation:
       "ticket_ids": [12345, 12346],
       "clients": ["Name 1", "Name 2"],
       "tags": ["tag1", "tag2"],
-      "devices": ["iOS", "Android"]
+      "devices": ["iOS", "Android"],
+      "platforms": ["Fox One", "SCHN+"],
+      "trend": "high"
     }}
   ]
 }}"""
