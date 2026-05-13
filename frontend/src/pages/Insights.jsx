@@ -207,17 +207,6 @@ function GroupCard({ group, index, trackerDetails, palette = CLIENT_PALETTES[0] 
               </div>
             )}
 
-            {group.clients?.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Clients</p>
-                <div className="flex flex-wrap gap-1">
-                  {group.clients.map(cl => (
-                    <span key={cl} className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">{cl}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {group.tags?.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tags</p>
