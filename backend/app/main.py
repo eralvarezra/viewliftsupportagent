@@ -52,3 +52,5 @@ async def startup_event():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+from app.routes.freshdesk import router as freshdesk_router
+app.include_router(freshdesk_router, prefix="/api/freshdesk", tags=["freshdesk"])

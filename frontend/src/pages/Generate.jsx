@@ -21,6 +21,10 @@ export default function Generate() {
   const [nextSteps, setNextSteps] = useState(null)
   const [botNotes, setBotNotes] = useState(null)
   const [agentNotes, setAgentNotes] = useState("")
+  const [inputMode, setInputMode] = useState('manual') // 'manual' | 'freshdesk'
+  const [fdInput, setFdInput] = useState('')
+  const [fdTicket, setFdTicket] = useState(null)
+  const [fdLoading, setFdLoading] = useState(false)
   const [needsVerification, setNeedsVerification] = useState(false)
   const [faqSources, setFaqSources] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -200,8 +204,28 @@ export default function Generate() {
     }
   }
 
+  const loadFdTicket = async () => {
+    const match = fdInput.match(/\/tickets\/(\d+)/) || fdInput.match(/^(\d+)$/)
+    if (!match) { toast.error('Enter a valid ticket ID or URL'); return }
+    const id = match[1]
+    setFdLoading(true)
+    try {
+      const r = await client.get(`/freshdesk/ticket/${id}`)
+      setFdTicket(r.data)
+      // Pre-fill customer message with ticket data
+      const msg = `[Ticket #${r.data.id}] ${r.data.subject}\n\n[Customer Message]\n${r.data.description}`
+      setCustomerMessage(msg)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to load ticket')
+    } finally {
+      setFdLoading(false)
+    }
+  }
+
   const handleClear = () => {
     setAgentNotes("")
+    setFdTicket(null)
+    setFdInput("")
     setCustomerMessage('')
     setScreenshots([])
     setParsedInfo(null)
@@ -227,20 +251,60 @@ export default function Generate() {
         {/* Left Panel - Input */}
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-800">Full Message Content</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  Include: latest message, email thread, account notes - AI will parse everything
-                </p>
+            {/* Mode tabs */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-xs font-medium">
+                <button
+                  onClick={() => setInputMode('manual')}
+                  className={`px-3 py-1.5 transition-colors ${inputMode === 'manual' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                >
+                  Manual
+                </button>
+                <button
+                  onClick={() => setInputMode('freshdesk')}
+                  className={`px-3 py-1.5 transition-colors border-l border-gray-200 dark:border-gray-600 ${inputMode === 'freshdesk' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                >
+                  Freshdesk Ticket
+                </button>
               </div>
-              <button
-                onClick={handleClear}
-                className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                Clear
-              </button>
+              <button onClick={handleClear} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Clear</button>
             </div>
+
+            {/* Freshdesk ticket loader */}
+            {inputMode === 'freshdesk' && (
+              <div className="mb-4 space-y-3">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={fdInput}
+                    onChange={e => setFdInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && loadFdTicket()}
+                    placeholder="Ticket ID or URL (e.g. 333954)"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={loadFdTicket}
+                    disabled={fdLoading || !fdInput.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+                  >
+                    {fdLoading ? 'Loading...' : 'Load'}
+                  </button>
+                </div>
+                {fdTicket && (
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 p-3 text-xs space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-blue-800 dark:text-blue-300">#{fdTicket.id}</span>
+                      <span className="font-semibold text-gray-800 dark:text-white">{fdTicket.subject}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300">{fdTicket.status}</span>
+                    </div>
+                    {fdTicket.requester_name && <p className="text-gray-500 dark:text-gray-400">From: {fdTicket.requester_name} {fdTicket.requester_email ? `(${fdTicket.requester_email})` : ''}</p>}
+                    {fdTicket.company && <p className="text-gray-500 dark:text-gray-400">Company: {fdTicket.company}</p>}
+                    {fdTicket.tags?.length > 0 && <p className="text-gray-500 dark:text-gray-400">Tags: {fdTicket.tags.join(', ')}</p>}
+                    <a href={fdTicket.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Open in Freshdesk ↗</a>
+                  </div>
+                )}
+              </div>
+            )}
 
             <textarea
               value={customerMessage}
