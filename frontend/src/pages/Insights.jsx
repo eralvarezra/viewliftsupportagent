@@ -46,6 +46,16 @@ const CLIENT_COLOR_MAP = [
   { keys: ['other'], idx: 7 },                                    // rose
 ]
 
+const KNOWN_CLIENTS = [
+  'Altitude B2C',
+  'MSN B2C (Monumental Sports Network)',
+  'FOX One B2C',
+  'Vegas Golden Knights B2C',
+  'DIRTvision B2C',
+  'SCHN+ B2C',
+  'LIV Golf+ B2C',
+]
+
 const clientColorCache = {}
 let clientColorCounter = 0
 const getClientPalette = (clientName) => {
@@ -342,19 +352,29 @@ export default function DailyUpdate() {
     msg += '\n'
 
     msg += '*🔴 High Trend Issues*\n'
-    if (highGroups.length === 0) {
-      msg += '_No high trend groups_\n'
-    } else {
-      const grouped = byClient(highGroups)
-      Object.entries(grouped).forEach(([platform, groups]) => {
-        msg += '\n*' + platform + '*\n'
+    const highGrouped = byClient(highGroups)
+    // Add known clients with no trends
+    KNOWN_CLIENTS.forEach(kc => {
+      const already = Object.keys(highGrouped).some(k => k.toLowerCase().includes(kc.split(' ')[0].toLowerCase()))
+      if (!already) highGrouped[kc] = []
+    })
+    Object.entries(highGrouped).sort(([a], [b]) => {
+      const ai = KNOWN_CLIENTS.findIndex(k => a.toLowerCase().includes(k.split(' ')[0].toLowerCase()))
+      const bi = KNOWN_CLIENTS.findIndex(k => b.toLowerCase().includes(k.split(' ')[0].toLowerCase()))
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+    }).forEach(([cl, groups]) => {
+      msg += '\n*' + cl + '*\n'
+      if (groups.length === 0) {
+        msg += '  _No new trends identified_\n'
+      } else {
         groups.forEach(g => {
           msg += '  • *' + g.title + '* — ' + (g.ticket_ids?.length || 0) + ' tickets'
           if (g.devices?.length) msg += ' | ' + g.devices.join(', ')
           msg += '\n'
+          if (g.description) msg += '    _' + g.description + '_\n'
         })
-      })
-    }
+      }
+    })
 
     msg += '\n*🔗 Tracker-Linked Groups*\n'
     if (trackerGroups.length === 0) {
@@ -610,6 +630,11 @@ export default function DailyUpdate() {
                   clientMap[cl].push(g)
                 })
               })
+              // Add known clients with no groups as empty entries
+              KNOWN_CLIENTS.forEach(kc => {
+                const already = Object.keys(clientMap).some(k => k.toLowerCase().includes(kc.split(' ')[0].toLowerCase()))
+                if (!already) clientMap[kc] = []
+              })
               return (
                 <div className="space-y-6">
                   {Object.entries(clientMap).sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)).map(([client, groups]) => {
@@ -617,11 +642,15 @@ export default function DailyUpdate() {
                     return (
                       <div key={client}>
                         <h5 className={`text-xs font-bold uppercase tracking-widest mb-2 pb-1 border-b ${pal.header}`}>{client}</h5>
-                        <div className="space-y-3">
-                          {groups.map((group, i) => (
-                            <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} palette={pal} />
-                          ))}
-                        </div>
+                        {groups.length === 0 ? (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 italic px-1 mb-1">No new trends identified</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {groups.map((group, i) => (
+                              <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} palette={pal} />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
