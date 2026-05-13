@@ -350,12 +350,23 @@ export default function DailyUpdate() {
 
     msg += `\n_Source: \${result.filename}_`
 
-    navigator.clipboard.writeText(msg).then(() => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(msg).then(() => {
+        setSlackCopied(true)
+        setTimeout(() => setSlackCopied(false), 2000)
+      }).catch(() => toast.error('Could not copy'))
+    } else {
+      const el = document.createElement('textarea')
+      el.value = msg
+      el.style.position = 'fixed'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
       setSlackCopied(true)
       setTimeout(() => setSlackCopied(false), 2000)
-    }).catch(() => {
-      toast.error('Could not copy')
-    })
+    }
   }
 
   return (
