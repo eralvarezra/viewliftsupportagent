@@ -318,15 +318,15 @@ export default function DailyUpdate() {
     const highGroups = (result.groups || []).filter(g => g.trend === 'high')
     const trackerGroups = (result.groups || []).filter(g => g.tracker_ids && g.tracker_ids.length > 0)
 
-    // helper: group an array of groups by platform
-    const byPlatform = (groups) => {
+    // helper: group an array of groups by client
+    const byClient = (groups) => {
       const map = {}
       groups.forEach(g => {
-        const platforms = (g.platforms || []).filter(p => p && p !== 'None' && p !== 'none' && p.trim() !== '')
-        const effectivePlatforms = platforms.length ? platforms : ['Other']
-        effectivePlatforms.forEach(p => {
-          if (!map[p]) map[p] = []
-          map[p].push(g)
+        const clients = (g.clients || []).filter(cl => cl && cl !== 'None' && cl.trim() !== '')
+        const effectiveClients = clients.length ? clients : ['Other']
+        effectiveClients.forEach(cl => {
+          if (!map[cl]) map[cl] = []
+          map[cl].push(g)
         })
       })
       return map
@@ -340,7 +340,7 @@ export default function DailyUpdate() {
     if (highGroups.length === 0) {
       msg += '_No high trend groups_\n'
     } else {
-      const grouped = byPlatform(highGroups)
+      const grouped = byClient(highGroups)
       Object.entries(grouped).forEach(([platform, groups]) => {
         msg += '\n*' + platform + '*\n'
         groups.forEach(g => {
@@ -355,7 +355,7 @@ export default function DailyUpdate() {
     if (trackerGroups.length === 0) {
       msg += '_No trackers_\n'
     } else {
-      const grouped = byPlatform(trackerGroups)
+      const grouped = byClient(trackerGroups)
       Object.entries(grouped).forEach(([platform, groups]) => {
         msg += '\n*' + platform + '*\n'
         groups.forEach(g => {
@@ -611,12 +611,30 @@ export default function DailyUpdate() {
                 if (filterTracker && (!g.tracker_ids || g.tracker_ids.length === 0)) return false
                 return true
               })
-              return filtered.length === 0 ? (
+              if (filtered.length === 0) return (
                 <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No groups match the selected filters.</div>
-              ) : (
-                <div className="space-y-3">
-                  {filtered.map((group, i) => (
-                    <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} />
+              )
+              // Group by client
+              const clientMap = {}
+              filtered.forEach(g => {
+                const clients = (g.clients || []).filter(cl => cl && cl !== 'None' && cl.trim() !== '')
+                const effectiveClients = clients.length ? clients : ['Other']
+                effectiveClients.forEach(cl => {
+                  if (!clientMap[cl]) clientMap[cl] = []
+                  clientMap[cl].push(g)
+                })
+              })
+              return (
+                <div className="space-y-6">
+                  {Object.entries(clientMap).sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)).map(([client, groups]) => (
+                    <div key={client}>
+                      <h5 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 pb-1 border-b border-gray-200 dark:border-gray-700">{client}</h5>
+                      <div className="space-y-3">
+                        {groups.map((group, i) => (
+                          <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )
