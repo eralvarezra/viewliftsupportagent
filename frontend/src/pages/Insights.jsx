@@ -312,6 +312,50 @@ export default function DailyUpdate() {
     if (file) processFile(file)
   }, [processFile])
 
+  const copyForSlack = () => {
+    const date = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    const highGroups = (result.groups || []).filter(g => g.trend === 'high')
+    const trackerGroups = (result.groups || []).filter(g => g.tracker_ids && g.tracker_ids.length > 0)
+
+    let msg = `*Daily Update — ${date}*\n`
+    msg += `${result.total_tickets} tickets analyzed • ${result.groups?.length || 0} groups found\n`
+    msg += `\n`
+
+    msg += `*🔴 High Trend Issues*\n`
+    if (highGroups.length === 0) {
+      msg += `_No high trend groups_\n`
+    } else {
+      highGroups.forEach(g => {
+        const ids = (g.ticket_ids || []).map(id => `#\${id}`).join(', ')
+        msg += `• *\${g.label}* — \${g.ticket_ids?.length || 0} tickets (\${ids})\n`
+        if (g.summary) msg += `  _\${g.summary}_\n`
+      })
+    }
+
+    msg += `\n*🔗 Tracker-Linked Groups*\n`
+    if (trackerGroups.length === 0) {
+      msg += `_No trackers_\n`
+    } else {
+      trackerGroups.forEach(g => {
+        const ids = (g.ticket_ids || []).map(id => `#\${id}`).join(', ')
+        const trackerInfo = g.tracker_ids.map(tid => {
+          const td = result.tracker_details?.[tid]
+          return td ? `Tracker #\${tid}: \${td.subject} (\${td.status})` : `Tracker #\${tid}`
+        }).join(', ')
+        msg += `• *\${g.label}* → \${trackerInfo}\n`
+        msg += `  Tickets: \${ids}\n`
+      })
+    }
+
+    msg += `\n_Source: \${result.filename}_`
+
+    navigator.clipboard.writeText(msg).then(() => {
+      toast.success('Copied to clipboard!')
+    }).catch(() => {
+      toast.error('Could not copy')
+    })
+  }
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -447,9 +491,20 @@ export default function DailyUpdate() {
 
                 </div>
               </div>
-              <button onClick={() => { setResult(null); setFileName(null) }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                Clear
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={copyForSlack}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#4A154B] hover:bg-[#611f69] text-white text-xs font-medium transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+                  </svg>
+                  Copy for Slack
+                </button>
+                <button onClick={() => { setResult(null); setFileName(null) }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                  Clear
+                </button>
+              </div>
             </div>
 
             {/* Active Trackers section */}
