@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
-from app.auth.routes import require_admin
+from app.auth.routes import require_admin, get_current_user
 from app.models import User
 from app.services.claude_client import ClaudeClient
 from app.config import settings
@@ -14,7 +14,7 @@ MAX_TICKETS = 300
 @router.post("/analyze")
 async def analyze_daily_update(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
 ):
     if not (file.filename or "").lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
