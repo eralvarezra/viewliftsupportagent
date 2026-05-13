@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import Layout from '../components/Layout'
 import client from '../api/client'
 import toast from 'react-hot-toast'
@@ -238,6 +238,40 @@ export default function DailyUpdate() {
   const [dragOver, setDragOver] = useState(false)
   const [fileName, setFileName] = useState(null)
   const inputRef = useRef(null)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [activeReportId, setActiveReportId] = useState(null)
+
+  useEffect(() => {
+    client.get('/daily-update/history')
+      .then(r => setHistory(r.data))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false))
+  }, [])
+
+  const loadReport = async (id) => {
+    try {
+      const r = await client.get(`/daily-update/history/${id}`)
+      setResult(r.data)
+      setFileName(r.data.filename || 'saved report')
+      setActiveReportId(id)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {
+      toast.error('Failed to load report')
+    }
+  }
+
+  const deleteReport = async (id, e) => {
+    e.stopPropagation()
+    try {
+      await client.delete(`/daily-update/history/${id}`)
+      setHistory(prev => prev.filter(r => r.id !== id))
+      if (activeReportId === id) { setResult(null); setFileName(null); setActiveReportId(null) }
+      toast.success('Report deleted')
+    } catch {
+      toast.error('Failed to delete report')
+    }
+  }
 
   const processFile = useCallback(async (file) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
@@ -255,7 +289,9 @@ export default function DailyUpdate() {
         timeout: 180000,
       })
       setResult(res.data)
+      setActiveReportId(null)
       toast.success('Analysis complete')
+      client.get('/daily-update/history').then(r => setHistory(r.data)).catch(() => {})
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to analyze CSV')
     } finally {
@@ -306,6 +342,53 @@ export default function DailyUpdate() {
             ))}
           </ol>
         </div>
+
+        {/* History */}
+        {(history.length > 0 || historyLoading) && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-3">Past Reports</h3>
+            {historyLoading ? (
+              <div className="h-8 w-48 bg-gray-100 dark:bg-gray-700 rounded animate-pulse" />
+            ) : (
+              <div className="space-y-1 max-h-52 overflow-y-auto">
+                {history.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => loadReport(r.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors group ${
+                      activeReportId === r.id
+                        ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{r.filename}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {new Date(r.created_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <div className="flex-shrink-0 text-right mr-2">
+                      <p className="text-xs font-medium text-gray-600 dark:text-gray-400">{r.total_tickets} tickets</p>
+                      <p className="text-xs text-gray-400">{r.group_count} groups</p>
+                    </div>
+                    <button
+                      onClick={(e) => deleteReport(r.id, e)}
+                      className="opacity-0 group-hover:opacity-100 flex-shrink-0 p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-all rounded"
+                      title="Delete report"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                    {activeReportId === r.id && (
+                      <span className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Upload */}
         <div

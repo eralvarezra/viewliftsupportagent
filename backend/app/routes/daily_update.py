@@ -24,16 +24,22 @@ FRESHDESK_AUTH = (settings.FRESHDESK_API_KEY, "X")
 
 
 def _fetch_ticket(ticket_id: int) -> dict | None:
-    try:
-        r = requests.get(
-            f"{FRESHDESK_BASE}/tickets/{ticket_id}",
-            auth=FRESHDESK_AUTH,
-            timeout=10,
-        )
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        pass
+    import time
+    for attempt in range(3):
+        try:
+            r = requests.get(
+                f"{FRESHDESK_BASE}/tickets/{ticket_id}",
+                auth=FRESHDESK_AUTH,
+                timeout=10,
+            )
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code == 429:
+                time.sleep(2 ** attempt)
+                continue
+        except Exception:
+            pass
+        break
     return None
 
 
@@ -215,3 +221,16 @@ async def get_daily_update_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     return report.result_json
+
+@router.delete("/history/{report_id}")
+async def delete_daily_update_report(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    report = db.query(DailyUpdateReport).filter(DailyUpdateReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    db.delete(report)
+    db.commit()
+    return {"ok": True}
