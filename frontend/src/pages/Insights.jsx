@@ -99,7 +99,6 @@ function TrackerGroupCard({ tg, trackerDetails }) {
 
 function GroupCard({ group, index, trackerDetails }) {
   const [open, setOpen] = useState(true)
-  const trackedSet = new Set(group.tracked_ticket_ids || [])
   const trend = TREND_CONFIG[group.trend] || TREND_CONFIG.low
   const hasTrackers = group.tracker_ids?.length > 0
 
@@ -146,11 +145,7 @@ function GroupCard({ group, index, trackerDetails }) {
           <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
             {group.ticket_ids?.length || 0} ticket{(group.ticket_ids?.length || 0) !== 1 ? 's' : ''}
           </span>
-          {trackedSet.size > 0 && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 font-medium">
-              {trackedSet.size} logged
-            </span>
-          )}
+
         </div>
         <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -192,18 +187,7 @@ function GroupCard({ group, index, trackerDetails }) {
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tickets</p>
                 <div className="flex flex-wrap gap-1">
                   {group.ticket_ids.map(id => (
-                    <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono border ${
-                      trackedSet.has(id)
-                        ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-300'
-                        : 'bg-white border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
-                    }`}>
-                      #{id}
-                      {trackedSet.has(id) && (
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </span>
+                    <span key={id} className="inline-block px-2 py-0.5 rounded text-xs font-mono border bg-white border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300">#{id}</span>
                   ))}
                 </div>
               </div>
@@ -371,11 +355,7 @@ export default function DailyUpdate() {
                       🔗 {result.total_with_freshdesk_tracker} ticket{result.total_with_freshdesk_tracker !== 1 ? 's' : ''} linked to a Freshdesk tracker
                     </p>
                   )}
-                  {result.total_tracked > 0 && (
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      ✓ {result.total_tracked} logged by Tampermonkey
-                    </p>
-                  )}
+
                 </div>
               </div>
               <button onClick={() => { setResult(null); setFileName(null) }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
@@ -408,7 +388,7 @@ export default function DailyUpdate() {
             <div className="flex items-center gap-4 mb-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-200 inline-block" /> High trend (3+ tickets)</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-200 inline-block" /> Medium (2 tickets)</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-200 inline-block" /> ✓ Logged by agent</span>
+
               <span className="flex items-center gap-1"><span className="text-red-500">🔗</span> Has Freshdesk tracker</span>
             </div>
 

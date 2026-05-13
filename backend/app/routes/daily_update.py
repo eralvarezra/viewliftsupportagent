@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.routes import get_current_user
 from app.database import get_db
-from app.models import User, TicketLog, DailyUpdateReport
+from app.models import User, DailyUpdateReport
 from app.services.claude_client import ClaudeClient
 from app.config import settings
 
@@ -21,9 +21,6 @@ FRESHDESK_BASE = f"https://{settings.FRESHDESK_DOMAIN}/api/v2"
 FRESHDESK_AUTH = (settings.FRESHDESK_API_KEY, "X")
 
 
-def _extract_ticket_id_from_url(url: str):
-    m = re.search(r'/tickets/(\d+)', url or '')
-    return int(m.group(1)) if m else None
 
 
 def _fetch_ticket(ticket_id: int) -> dict | None:
@@ -147,24 +144,12 @@ async def analyze_daily_update(
             }
         tracker_groups[tr_id]["ticket_ids"].append(tid)
 
-    # 3. Check TicketLog trackers (Tampermonkey)
-    logs = db.query(TicketLog.ticket_url).all()
-    tamper_tracked = set()
-    for (url,) in logs:
-        tid = _extract_ticket_id_from_url(url)
-        if tid:
-            tamper_tracked.add(tid)
-
-    # 4. Run Claude analysis
+    # 3. Run Claude analysis
     claude = ClaudeClient(api_key=settings.ANTHROPIC_API_KEY)
     result = claude.analyze_daily_update(tickets)
 
-    # 5. Annotate groups with tracker and tampermonkey info
+    # 4. Annotate groups with tracker info
     for group in result.get("groups", []):
-        group["tracked_ticket_ids"] = [
-            tid for tid in group.get("ticket_ids", [])
-            if tid in tamper_tracked
-        ]
         group["tracker_ids"] = list({
             tracker_by_ticket[tid]["tracker_id"]
             for tid in group.get("ticket_ids", [])
@@ -172,13 +157,11 @@ async def analyze_daily_update(
         })
 
     csv_id_set = set(csv_ticket_ids)
-    total_tracked = len(tamper_tracked & csv_id_set)
     total_with_tracker = len(set(tracker_by_ticket.keys()) & csv_id_set)
 
     result["tracker_groups"] = list(tracker_groups.values())
     result["tracker_details"] = tracker_details
     result["total_tickets"] = len(tickets)
-    result["total_tracked"] = total_tracked
     result["total_with_freshdesk_tracker"] = total_with_tracker
     result["filename"] = file.filename or "upload.csv"
 
@@ -187,7 +170,7 @@ async def analyze_daily_update(
         user_id=current_user.id,
         filename=file.filename or "upload.csv",
         total_tickets=len(tickets),
-        total_tracked=total_tracked,
+        total_tracked=total_with_tracker,
         result_json=result,
     )
     db.add(report)
