@@ -29,7 +29,7 @@ def _fetch_ticket(ticket_id: int) -> dict | None:
         try:
             r = requests.get(
                 f"{FRESHDESK_BASE}/tickets/{ticket_id}",
-                auth=FRESHDESK_AUTH,
+                auth=_auth,
                 timeout=10,
             )
             if r.status_code == 200:
@@ -43,7 +43,7 @@ def _fetch_ticket(ticket_id: int) -> dict | None:
     return None
 
 
-def _get_tracker_info(ticket_ids: list[int]) -> dict:
+def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
     """
     Returns {ticket_id: {"tracker_id": int, "tracker_subject": str, "tracker_status": str}}
     for tickets that are associated with a tracker (association_type == 4).
@@ -55,6 +55,7 @@ def _get_tracker_info(ticket_ids: list[int]) -> dict:
 
     tracker_cache = {}  # tracker_id -> {subject, status}
     result = {}
+    _auth = auth or FRESHDESK_AUTH
 
     # Fetch all ticket details in parallel (max 10 workers)
     ticket_data = {}
@@ -133,7 +134,8 @@ async def analyze_daily_update(
             csv_ticket_ids.append(int(raw_id))
 
     # 1. Fetch tracker info from Freshdesk
-    tracker_by_ticket, tracker_details = _get_tracker_info(csv_ticket_ids)
+    user_fd_auth = (current_user.freshdesk_api_key, "X") if current_user.freshdesk_api_key else FRESHDESK_AUTH
+    tracker_by_ticket, tracker_details = _get_tracker_info(csv_ticket_ids, auth=user_fd_auth)
 
     # 2. Build tracker groups (tracker_id -> list of ticket_ids from CSV)
     tracker_groups = {}

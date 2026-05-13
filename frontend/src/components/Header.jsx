@@ -115,6 +115,12 @@ export default function Header() {
                 {user?.role || 'unknown'}
               </span>
             </div>
+            <a
+              href="/profile"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 rounded-md transition-colors"
+            >
+              Settings
+            </a>
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 rounded-md transition-colors"

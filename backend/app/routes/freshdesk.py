@@ -18,9 +18,10 @@ async def get_freshdesk_ticket(
     ticket_id: int,
     current_user: User = Depends(get_current_user),
 ):
+    auth = (current_user.freshdesk_api_key, "X") if current_user.freshdesk_api_key else FRESHDESK_AUTH
     r = requests.get(
         f"{FRESHDESK_BASE}/tickets/{ticket_id}?include=requester,company",
-        auth=FRESHDESK_AUTH,
+        auth=auth,
         timeout=10,
     )
     if r.status_code == 404:

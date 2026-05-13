@@ -124,3 +124,24 @@ async def delete_user(
     db.delete(user)
     db.commit()
     return {"message": f"User {user.username} deleted"}
+
+@router.get("/me")
+def get_my_profile(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "role": current_user.role,
+        "freshdesk_api_key": current_user.freshdesk_api_key or "",
+    }
+
+@router.put("/me/freshdesk-key")
+def update_freshdesk_key(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    key = body.get("freshdesk_api_key", "").strip()
+    current_user.freshdesk_api_key = key or None
+    db.commit()
+    return {"ok": True, "freshdesk_api_key": current_user.freshdesk_api_key or ""}

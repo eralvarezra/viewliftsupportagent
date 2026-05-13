@@ -8,6 +8,7 @@ import History from './pages/History'
 import Users from './pages/Users'
 import Insights from './pages/Insights'
 import Tracker from './pages/Tracker'
+import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
 import { PlatformProvider } from './context/PlatformContext'
 

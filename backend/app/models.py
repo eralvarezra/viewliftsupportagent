@@ -41,6 +41,7 @@ class User(Base):
     monthly_cost = Column(Float, default=0.0, nullable=False, server_default="0.0")
     monthly_cost_month = Column(String(7), nullable=True)  # YYYY-MM
     api_key = Column(String, unique=True, nullable=True)
+    freshdesk_api_key = Column(String, nullable=True)
     ticket_logs = relationship("TicketLog", back_populates="user")
     daily_update_reports = relationship("DailyUpdateReport", back_populates="user")
 
