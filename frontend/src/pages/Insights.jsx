@@ -322,8 +322,9 @@ export default function DailyUpdate() {
     const byPlatform = (groups) => {
       const map = {}
       groups.forEach(g => {
-        const platforms = g.platforms?.length ? g.platforms : ['Other']
-        platforms.forEach(p => {
+        const platforms = (g.platforms || []).filter(p => p && p !== 'None' && p !== 'none' && p.trim() !== '')
+        const effectivePlatforms = platforms.length ? platforms : ['Other']
+        effectivePlatforms.forEach(p => {
           if (!map[p]) map[p] = []
           map[p].push(g)
         })
