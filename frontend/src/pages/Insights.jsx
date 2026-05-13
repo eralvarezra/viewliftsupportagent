@@ -467,25 +467,73 @@ export default function DailyUpdate() {
             )}
 
             {/* Issue groups */}
-            <div className="mb-3">
-              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
+            <div className="mb-3 flex items-center justify-between flex-wrap gap-3">
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
                 Issue Groups
               </h4>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-400 dark:text-gray-500">Filter:</span>
+                {['high', 'medium', 'low'].map(level => (
+                  <button
+                    key={level}
+                    onClick={() => setFilterTrend(filterTrend === level ? null : level)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                      filterTrend === level
+                        ? level === 'high'
+                          ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700'
+                          : level === 'medium'
+                            ? 'bg-yellow-100 text-yellow-700 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-300 dark:border-yellow-700'
+                            : 'bg-gray-200 text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-500'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'
+                    }`}
+                  >
+                    {level.charAt(0).toUpperCase() + level.slice(1)}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setFilterTracker(!filterTracker)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                    filterTracker
+                      ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600'
+                  }`}
+                >
+                  🔗 Has Tracker
+                </button>
+                {(filterTrend || filterTracker) && (
+                  <button
+                    onClick={() => { setFilterTrend(null); setFilterTracker(false) }}
+                    className="px-2 py-1 rounded-full text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Legend */}
             <div className="flex items-center gap-4 mb-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-200 inline-block" /> High trend (3+ tickets)</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-200 inline-block" /> High (3+ tickets)</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-200 inline-block" /> Medium (2 tickets)</span>
-
               <span className="flex items-center gap-1"><span className="text-red-500">🔗</span> Has Freshdesk tracker</span>
             </div>
 
-            <div className="space-y-3">
-              {result.groups?.map((group, i) => (
-                <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} />
-              ))}
-            </div>
+            {(() => {
+              const filtered = (result.groups || []).filter(g => {
+                if (filterTrend && g.trend !== filterTrend) return false
+                if (filterTracker && (!g.tracker_ids || g.tracker_ids.length === 0)) return false
+                return true
+              })
+              return filtered.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">No groups match the selected filters.</div>
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map((group, i) => (
+                    <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} />
+                  ))}
+                </div>
+              )
+            })()}
             <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-4">Source: {result.filename}</p>
           </div>
         )}
