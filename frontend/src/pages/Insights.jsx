@@ -318,37 +318,37 @@ export default function DailyUpdate() {
     const highGroups = (result.groups || []).filter(g => g.trend === 'high')
     const trackerGroups = (result.groups || []).filter(g => g.tracker_ids && g.tracker_ids.length > 0)
 
-    let msg = `*Daily Update — ${date}*\n`
-    msg += `${result.total_tickets} tickets analyzed • ${result.groups?.length || 0} groups found\n`
-    msg += `\n`
+    let msg = '*Daily Update — ' + date + '*\n'
+    msg += result.total_tickets + ' tickets analyzed • ' + (result.groups?.length || 0) + ' groups found\n'
+    msg += '\n'
 
-    msg += `*🔴 High Trend Issues*\n`
+    msg += '*🔴 High Trend Issues*\n'
     if (highGroups.length === 0) {
-      msg += `_No high trend groups_\n`
+      msg += '_No high trend groups_\n'
     } else {
       highGroups.forEach(g => {
-        const ids = (g.ticket_ids || []).map(id => `#\${id}`).join(', ')
-        msg += `• *\${g.label}* — \${g.ticket_ids?.length || 0} tickets (\${ids})\n`
-        if (g.summary) msg += `  _\${g.summary}_\n`
+        const ids = (g.ticket_ids || []).map(id => '#' + id).join(', ')
+        msg += '• *' + g.label + '* — ' + (g.ticket_ids?.length || 0) + ' tickets (' + ids + ')\n'
+        if (g.summary) msg += '  _' + g.summary + '_\n'
       })
     }
 
-    msg += `\n*🔗 Tracker-Linked Groups*\n`
+    msg += '\n*🔗 Tracker-Linked Groups*\n'
     if (trackerGroups.length === 0) {
-      msg += `_No trackers_\n`
+      msg += '_No trackers_\n'
     } else {
       trackerGroups.forEach(g => {
-        const ids = (g.ticket_ids || []).map(id => `#\${id}`).join(', ')
+        const ids = (g.ticket_ids || []).map(id => '#' + id).join(', ')
         const trackerInfo = g.tracker_ids.map(tid => {
           const td = result.tracker_details?.[tid]
-          return td ? `Tracker #\${tid}: \${td.subject} (\${td.status})` : `Tracker #\${tid}`
+          return td ? 'Tracker #' + tid + ': ' + td.subject + ' (' + td.status + ')' : 'Tracker #' + tid
         }).join(', ')
-        msg += `• *\${g.label}* → \${trackerInfo}\n`
-        msg += `  Tickets: \${ids}\n`
+        msg += '• *' + g.label + '* → ' + trackerInfo + '\n'
+        msg += '  Tickets: ' + ids + '\n'
       })
     }
 
-    msg += `\n_Source: \${result.filename}_`
+    msg += '\n_Source: ' + result.filename + '_'
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(msg).then(() => {
