@@ -24,6 +24,27 @@ const TREND_CONFIG = {
   low:    { label: 'Low',    cls: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300' },
 }
 
+const CLIENT_PALETTES = [
+  { card: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700',   badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',   header: 'text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-700' },
+  { card: 'bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-700', badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300', header: 'text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-700' },
+  { card: 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700',  badge: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',   header: 'text-green-700 dark:text-green-400 border-green-200 dark:border-green-700' },
+  { card: 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-700', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300', header: 'text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-700' },
+  { card: 'bg-pink-50 border-pink-200 dark:bg-pink-900/20 dark:border-pink-700',    badge: 'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300',     header: 'text-pink-700 dark:text-pink-400 border-pink-200 dark:border-pink-700' },
+  { card: 'bg-teal-50 border-teal-200 dark:bg-teal-900/20 dark:border-teal-700',   badge: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',    header: 'text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-700' },
+  { card: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-700', badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300', header: 'text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-700' },
+  { card: 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-700',   badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',    header: 'text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-700' },
+]
+
+const clientColorCache = {}
+let clientColorCounter = 0
+const getClientPalette = (clientName) => {
+  if (!clientColorCache[clientName]) {
+    clientColorCache[clientName] = CLIENT_PALETTES[clientColorCounter % CLIENT_PALETTES.length]
+    clientColorCounter++
+  }
+  return clientColorCache[clientName]
+}
+
 function TrackerGroupCard({ tg, trackerDetails }) {
   const [open, setOpen] = useState(true)
   const details = trackerDetails?.[tg.tracker_id] || {}
@@ -97,36 +118,18 @@ function TrackerGroupCard({ tg, trackerDetails }) {
   )
 }
 
-function GroupCard({ group, index, trackerDetails }) {
+function GroupCard({ group, index, trackerDetails, palette = CLIENT_PALETTES[0] }) {
   const [open, setOpen] = useState(true)
   const trend = TREND_CONFIG[group.trend] || TREND_CONFIG.low
   const hasTrackers = group.tracker_ids?.length > 0
 
-  const colors = [
-    'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-700',
-    'bg-purple-50 border-purple-200 dark:bg-purple-900/20 dark:border-purple-700',
-    'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700',
-    'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-700',
-    'bg-pink-50 border-pink-200 dark:bg-pink-900/20 dark:border-pink-700',
-    'bg-teal-50 border-teal-200 dark:bg-teal-900/20 dark:border-teal-700',
-  ]
-  const numColors = [
-    'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-    'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-    'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
-    'bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300',
-    'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
-  ]
-  const c = index % colors.length
-
   return (
-    <div className={`rounded-lg border ${colors[c]} overflow-hidden`}>
+    <div className={`rounded-lg border ${palette.card} overflow-hidden`}>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:opacity-90 transition-opacity"
       >
-        <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${numColors[c]}`}>
+        <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold ${palette.badge}`}>
           {index + 1}
         </span>
         <div className="flex-1 min-w-0">
@@ -607,16 +610,19 @@ export default function DailyUpdate() {
               })
               return (
                 <div className="space-y-6">
-                  {Object.entries(clientMap).sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)).map(([client, groups]) => (
-                    <div key={client}>
-                      <h5 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 pb-1 border-b border-gray-200 dark:border-gray-700">{client}</h5>
-                      <div className="space-y-3">
-                        {groups.map((group, i) => (
-                          <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} />
-                        ))}
+                  {Object.entries(clientMap).sort(([a], [b]) => a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)).map(([client, groups]) => {
+                    const pal = getClientPalette(client)
+                    return (
+                      <div key={client}>
+                        <h5 className={`text-xs font-bold uppercase tracking-widest mb-2 pb-1 border-b ${pal.header}`}>{client}</h5>
+                        <div className="space-y-3">
+                          {groups.map((group, i) => (
+                            <GroupCard key={i} group={group} index={i} trackerDetails={result.tracker_details} palette={pal} />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             })()}
