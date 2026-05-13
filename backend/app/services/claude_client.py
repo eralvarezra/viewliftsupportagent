@@ -295,7 +295,8 @@ TICKET DATA (use ONLY what is explicitly stated here — do NOT invent any infor
 INSTRUCTIONS:
 - Group tickets by BOTH client AND problem type — each group must contain tickets from ONE client only
 - If the same problem affects multiple clients, create a separate group for each client
-- Each ticket must belong to exactly one group
+- ONLY include groups with 3 or more tickets (high trend) — ignore smaller groups completely
+- Spam tickets must be ignored entirely
 - For each group extract strictly from the data above:
   * title: short problem label (e.g. "Login Issues", "Video Playback Error")
   * description: 1-2 sentences describing the pattern
