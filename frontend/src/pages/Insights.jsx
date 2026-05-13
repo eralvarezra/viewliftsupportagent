@@ -241,6 +241,8 @@ export default function DailyUpdate() {
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [activeReportId, setActiveReportId] = useState(null)
+  const [filterTrend, setFilterTrend] = useState(null) // null | 'high' | 'medium' | 'low'
+  const [filterTracker, setFilterTracker] = useState(false)
 
   useEffect(() => {
     client.get('/daily-update/history')
@@ -255,6 +257,8 @@ export default function DailyUpdate() {
       setResult(r.data)
       setFileName(r.data.filename || 'saved report')
       setActiveReportId(id)
+      setFilterTrend(null)
+      setFilterTracker(false)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch {
       toast.error('Failed to load report')
@@ -290,6 +294,8 @@ export default function DailyUpdate() {
       })
       setResult(res.data)
       setActiveReportId(null)
+      setFilterTrend(null)
+      setFilterTracker(false)
       toast.success('Analysis complete')
       client.get('/daily-update/history').then(r => setHistory(r.data)).catch(() => {})
     } catch (err) {
