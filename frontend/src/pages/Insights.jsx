@@ -4,18 +4,18 @@ import client from '../api/client'
 import toast from 'react-hot-toast'
 
 const STEPS = [
-  { n: 1, text: 'En Freshdesk, aplica el filtro: B2C → New tickets created today' },
-  { n: 2, text: 'Haz click en el botón "Export"' },
+  { n: 1, text: 'In Freshdesk, apply the filter: B2C → New tickets created today' },
+  { n: 2, text: 'Click the "Export" button' },
   {
     n: 3,
-    text: 'Selecciona los siguientes campos:',
+    text: 'Select the following fields:',
     fields: {
       'Ticket fields': 'Ticket ID, Subject, Description, Status, Type, Created time, Tags, Survey results, Product, Summary, Client Name, Platform',
       'Contact fields': 'Full name, Email, Contact ID',
     },
   },
-  { n: 4, text: 'Haz click en "Export" para descargar el CSV' },
-  { n: 5, text: 'Sube el CSV descargado en el área de abajo' },
+  { n: 4, text: 'Click "Export" to download the CSV file' },
+  { n: 5, text: 'Upload the downloaded CSV in the area below' },
 ]
 
 function GroupCard({ group, index }) {
@@ -41,7 +41,6 @@ function GroupCard({ group, index }) {
 
   return (
     <div className={`rounded-lg border ${colors[c]} overflow-hidden`}>
-      {/* Header */}
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:opacity-90 transition-opacity"
@@ -63,11 +62,9 @@ function GroupCard({ group, index }) {
 
       {open && (
         <div className="px-5 pb-5 pt-1 space-y-4 border-t border-inherit">
-          {/* Description */}
           <p className="text-sm text-gray-700 dark:text-gray-300">{group.description}</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Ticket IDs */}
             {group.ticket_ids?.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tickets</p>
@@ -81,10 +78,9 @@ function GroupCard({ group, index }) {
               </div>
             )}
 
-            {/* Devices */}
             {group.devices?.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Dispositivos</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Devices</p>
                 <div className="flex flex-wrap gap-1">
                   {group.devices.map(d => (
                     <span key={d} className="inline-block px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">
@@ -95,10 +91,9 @@ function GroupCard({ group, index }) {
               </div>
             )}
 
-            {/* Clients */}
             {group.clients?.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Clientes</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Clients</p>
                 <div className="flex flex-wrap gap-1">
                   {group.clients.map(cl => (
                     <span key={cl} className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300">
@@ -109,7 +104,6 @@ function GroupCard({ group, index }) {
               </div>
             )}
 
-            {/* Tags */}
             {group.tags?.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tags</p>
@@ -138,7 +132,7 @@ export default function DailyUpdate() {
 
   const processFile = useCallback(async (file) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
-      toast.error('El archivo debe ser un CSV')
+      toast.error('File must be a CSV')
       return
     }
     setFileName(file.name)
@@ -152,9 +146,9 @@ export default function DailyUpdate() {
         timeout: 120000,
       })
       setResult(res.data)
-      toast.success('Análisis completado')
+      toast.success('Analysis complete')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Error al analizar el CSV')
+      toast.error(err.response?.data?.detail || 'Failed to analyze CSV')
     } finally {
       setLoading(false)
     }
@@ -170,18 +164,17 @@ export default function DailyUpdate() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Daily Update</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Análisis agrupado de tickets del día desde Freshdesk
+            Grouped analysis of today's Freshdesk tickets
           </p>
         </div>
 
         {/* Instructions */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5 mb-6">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-4">
-            Cómo generar el reporte
+            How to generate the report
           </h3>
           <ol className="space-y-3">
             {STEPS.map(step => (
@@ -226,8 +219,8 @@ export default function DailyUpdate() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
-              <p className="text-sm text-blue-600 font-medium">Analizando {fileName}...</p>
-              <p className="text-xs text-gray-400 mt-1">Esto puede tomar hasta 30 segundos</p>
+              <p className="text-sm text-blue-600 font-medium">Analyzing {fileName}...</p>
+              <p className="text-xs text-gray-400 mt-1">This may take up to 30 seconds</p>
             </>
           ) : (
             <>
@@ -235,9 +228,9 @@ export default function DailyUpdate() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
-                {fileName ? `${fileName} — click o arrastra para cambiar` : 'Arrastra el CSV aquí o haz click para seleccionar'}
+                {fileName ? `${fileName} — click or drag to replace` : 'Drag the CSV here or click to select'}
               </p>
-              <p className="text-xs text-gray-400 mt-1">Solo archivos .csv exportados de Freshdesk</p>
+              <p className="text-xs text-gray-400 mt-1">Only .csv files exported from Freshdesk</p>
             </>
           )}
         </div>
@@ -247,14 +240,14 @@ export default function DailyUpdate() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-800 dark:text-white">
-                {result.groups?.length || 0} grupos encontrados
-                <span className="text-sm font-normal text-gray-400 ml-2">({result.total_tickets} tickets analizados)</span>
+                {result.groups?.length || 0} issue group{(result.groups?.length || 0) !== 1 ? 's' : ''} found
+                <span className="text-sm font-normal text-gray-400 ml-2">({result.total_tickets} tickets analyzed)</span>
               </h3>
               <button
                 onClick={() => { setResult(null); setFileName(null) }}
                 className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
               >
-                Limpiar
+                Clear
               </button>
             </div>
             <div className="space-y-3">
@@ -263,7 +256,7 @@ export default function DailyUpdate() {
               ))}
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500 text-right mt-4">
-              Basado en: {result.filename}
+              Source: {result.filename}
             </p>
           </div>
         )}
