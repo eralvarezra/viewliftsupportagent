@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.routes import require_admin
+from app.auth.routes import require_admin, get_current_user
 from app.database import get_db
 from app.models import User, ResponseHistory
 from app.schemas import UserAdminItem, SetGoalRequest
