@@ -212,9 +212,7 @@ export default function Generate() {
     try {
       const r = await client.get(`/freshdesk/ticket/${id}`)
       setFdTicket(r.data)
-      // Pre-fill customer message with ticket data
-      const msg = `[Ticket #${r.data.id}] ${r.data.subject}\n\n[Customer Message]\n${r.data.description}`
-      setCustomerMessage(msg)
+      setCustomerMessage(r.data.full_thread || r.data.description)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to load ticket')
     } finally {
@@ -300,6 +298,7 @@ export default function Generate() {
                     {fdTicket.requester_name && <p className="text-gray-500 dark:text-gray-400">From: {fdTicket.requester_name} {fdTicket.requester_email ? `(${fdTicket.requester_email})` : ''}</p>}
                     {fdTicket.company && <p className="text-gray-500 dark:text-gray-400">Company: {fdTicket.company}</p>}
                     {fdTicket.tags?.length > 0 && <p className="text-gray-500 dark:text-gray-400">Tags: {fdTicket.tags.join(', ')}</p>}
+                    <p className="text-gray-500 dark:text-gray-400">{fdTicket.conversation_count || 0} replies in thread</p>
                     <a href={fdTicket.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">Open in Freshdesk ↗</a>
                   </div>
                 )}
