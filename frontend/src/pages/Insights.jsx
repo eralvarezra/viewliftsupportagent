@@ -318,6 +318,19 @@ export default function DailyUpdate() {
     const highGroups = (result.groups || []).filter(g => g.trend === 'high')
     const trackerGroups = (result.groups || []).filter(g => g.tracker_ids && g.tracker_ids.length > 0)
 
+    // helper: group an array of groups by platform
+    const byPlatform = (groups) => {
+      const map = {}
+      groups.forEach(g => {
+        const platforms = g.platforms?.length ? g.platforms : ['Other']
+        platforms.forEach(p => {
+          if (!map[p]) map[p] = []
+          map[p].push(g)
+        })
+      })
+      return map
+    }
+
     let msg = '*Daily Update — ' + date + '*\n'
     msg += result.total_tickets + ' tickets analyzed • ' + (result.groups?.length || 0) + ' groups found\n'
     msg += '\n'
@@ -326,12 +339,14 @@ export default function DailyUpdate() {
     if (highGroups.length === 0) {
       msg += '_No high trend groups_\n'
     } else {
-      highGroups.forEach(g => {
-        const ids = (g.ticket_ids || []).map(id => '#' + id).join(', ')
-        msg += '• *' + g.title + '* — ' + (g.ticket_ids?.length || 0) + ' tickets\n'
-        if (g.devices?.length) msg += '  Devices: ' + g.devices.join(', ') + '\n'
-        if (g.platforms?.length) msg += '  Platforms: ' + g.platforms.join(', ') + '\n'
-        msg += '  ' + ids + '\n'
+      const grouped = byPlatform(highGroups)
+      Object.entries(grouped).forEach(([platform, groups]) => {
+        msg += '\n*' + platform + '*\n'
+        groups.forEach(g => {
+          msg += '  • *' + g.title + '* — ' + (g.ticket_ids?.length || 0) + ' tickets'
+          if (g.devices?.length) msg += ' | ' + g.devices.join(', ')
+          msg += '\n'
+        })
       })
     }
 
@@ -339,20 +354,19 @@ export default function DailyUpdate() {
     if (trackerGroups.length === 0) {
       msg += '_No trackers_\n'
     } else {
-      trackerGroups.forEach(g => {
-        const ids = (g.ticket_ids || []).map(id => '#' + id).join(', ')
-        const trackerInfo = g.tracker_ids.map(tid => {
-          const td = result.tracker_details?.[tid]
-          return td ? 'Tracker #' + tid + ': ' + td.subject + ' (' + td.status + ')' : 'Tracker #' + tid
-        }).join(', ')
-        msg += '• *' + g.title + '* (' + (g.ticket_ids?.length || 0) + ' tickets) → ' + trackerInfo + '\n'
-        if (g.devices?.length) msg += '  Devices: ' + g.devices.join(', ') + '\n'
-        if (g.platforms?.length) msg += '  Platforms: ' + g.platforms.join(', ') + '\n'
-        msg += '  ' + ids + '\n'
+      const grouped = byPlatform(trackerGroups)
+      Object.entries(grouped).forEach(([platform, groups]) => {
+        msg += '\n*' + platform + '*\n'
+        groups.forEach(g => {
+          const trackerInfo = g.tracker_ids.map(tid => {
+            const td = result.tracker_details?.[tid]
+            return td ? 'Tracker #' + tid + ': ' + td.subject + ' (' + td.status + ')' : 'Tracker #' + tid
+          }).join(', ')
+          msg += '  • *' + g.title + '* — ' + (g.ticket_ids?.length || 0) + ' tickets → ' + trackerInfo + '\n'
+          if (g.devices?.length) msg += '    Devices: ' + g.devices.join(', ') + '\n'
+        })
       })
     }
-
-    msg += '\n_Source: ' + result.filename + '_'
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(msg).then(() => {
