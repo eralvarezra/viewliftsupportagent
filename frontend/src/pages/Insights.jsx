@@ -35,14 +35,27 @@ const CLIENT_PALETTES = [
   { card: 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-700',   badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',    header: 'text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-700' },
 ]
 
+const CLIENT_COLOR_MAP = [
+  { keys: ['altitude', 'alt+', 'altitude plus'], idx: 0 },       // blue
+  { keys: ['monumental', 'msn'], idx: 1 },                        // purple
+  { keys: ['fox', 'fox one'], idx: 2 },                           // green
+  { keys: ['vegas', 'vgk', 'golden knights'], idx: 3 },           // orange
+  { keys: ['dirtvision', 'dirt'], idx: 4 },                       // pink
+  { keys: ['schn', 'schn+'], idx: 5 },                            // teal
+  { keys: ['liv golf', 'liv'], idx: 6 },                          // indigo
+  { keys: ['other'], idx: 7 },                                    // rose
+]
+
 const clientColorCache = {}
 let clientColorCounter = 0
 const getClientPalette = (clientName) => {
-  if (!clientColorCache[clientName]) {
-    clientColorCache[clientName] = CLIENT_PALETTES[clientColorCounter % CLIENT_PALETTES.length]
-    clientColorCounter++
-  }
-  return clientColorCache[clientName]
+  if (clientColorCache[clientName]) return clientColorCache[clientName]
+  const lower = clientName.toLowerCase()
+  const match = CLIENT_COLOR_MAP.find(m => m.keys.some(k => lower.includes(k)))
+  const palette = match ? CLIENT_PALETTES[match.idx] : CLIENT_PALETTES[clientColorCounter % CLIENT_PALETTES.length]
+  if (!match) clientColorCounter++
+  clientColorCache[clientName] = palette
+  return palette
 }
 
 function TrackerGroupCard({ tg, trackerDetails }) {

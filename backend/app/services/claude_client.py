@@ -293,12 +293,13 @@ TICKET DATA (use ONLY what is explicitly stated here — do NOT invent any infor
 {tickets_text}
 
 INSTRUCTIONS:
-- Group tickets by BOTH client AND problem type — each group must contain tickets from ONE client only
-- If the same problem affects multiple clients, create a separate group for each client
+- Group tickets by BOTH client AND problem type — each group must contain tickets from EXACTLY ONE client only
+- If the same problem affects multiple clients, create a completely separate group for each client
+- NEVER mix tickets from different clients in the same group — this is mandatory
 - ONLY include groups with 3 or more tickets (high trend) — ignore smaller groups completely
 - Spam tickets must be ignored entirely
 - For each group extract strictly from the data above:
-  * title: short problem label (e.g. "Login Issues", "Video Playback Error")
+  * title: use standardized category names — choose the closest match from: "Login / Account Access Issues", "Billing / Payment Issues", "Refund Requests", "Subscription Cancellation", "Video Playback / Buffering", "Content / Streaming Access", "App Crashes / Technical Issues", "General App Inquiries". Only create a custom title if none of these fit
   * description: 1-2 sentences describing the pattern
   * ticket_ids: list of Ticket ID numbers (integers) for tickets in this group
   * clients: list of unique client/contact names (from "Client=" field)
