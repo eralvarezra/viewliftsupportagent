@@ -50,7 +50,7 @@ export default function Header() {
               <NavLink to="/tracker" className={navLinkClass}>Tracker</NavLink>
               {isAdmin && <NavLink to="/faqs" className={navLinkClass}>FAQs</NavLink>}
               {isAdmin && <NavLink to="/users" className={navLinkClass}>Users</NavLink>}
-              {isAdmin && <NavLink to="/insights" className={navLinkClass}>Insights</NavLink>}
+              {isAdmin && <NavLink to="/insights" className={navLinkClass}>Daily Update</NavLink>}
             </nav>
           </div>
 

@@ -2,13 +2,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.database import init_db
+from app.database import init_db, run_migrations
 from app.auth.routes import router as auth_router
 from app.routes.generate import router as generate_router
 from app.routes.faqs import router as faqs_router
 from app.routes.history import router as history_router
 from app.routes.users import router as users_router
 from app.routes.insights import router as insights_router
+from app.routes.platforms import router as platforms_router
+from app.routes.ticket_tracker import router as ticket_tracker_router
+from app.routes.daily_update import router as daily_update_router
 
 app = FastAPI(
     title="SCHN+ Support Assistant",
@@ -33,12 +36,15 @@ app.include_router(faqs_router, prefix="/api/faqs", tags=["faqs"])
 app.include_router(history_router, prefix="/api/history", tags=["history"])
 app.include_router(users_router, prefix="/api/users", tags=["users"])
 app.include_router(insights_router, prefix="/api/insights", tags=["insights"])
+app.include_router(platforms_router, prefix="/api/platforms", tags=["platforms"])
+app.include_router(ticket_tracker_router, prefix="/api/ticket-tracker", tags=["ticket-tracker"])
+app.include_router(daily_update_router, prefix="/api/daily-update", tags=["daily-update"])
 
 
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    # Create admin user if not exists
+    run_migrations()
     from app.auth.utils import create_admin_user
     create_admin_user()
 

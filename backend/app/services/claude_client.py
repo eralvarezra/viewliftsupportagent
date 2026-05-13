@@ -221,8 +221,8 @@ class ClaudeClient:
         tokens = {"input": response.usage.input_tokens, "output": response.usage.output_tokens}
         return response.content[0].text, tokens
 
-    def analyze_trends(self, summaries: List[str]) -> TrendsResponse:
-        filtered = [s.strip() for s in summaries if s and s.strip()]
+    def analyze_trends(self, summaries_with_ids: List[tuple]) -> TrendsResponse:
+        filtered = [(rid, s.strip()) for rid, s in summaries_with_ids if s and s.strip()]
         if not filtered:
             return TrendsResponse(
                 trends=[],
@@ -230,7 +230,8 @@ class ClaudeClient:
                 generated_at=datetime.now(timezone.utc),
             )
 
-        prompt = ANALYZE_TRENDS_PROMPT.format(summaries="\n".join(filtered))
+        lines = [f"ID={rid}: {s}" for rid, s in filtered]
+        prompt = ANALYZE_TRENDS_PROMPT.format(summaries="\n".join(lines))
 
         response = self.client.messages.create(
             model=self.PARSE_MODEL,  # Haiku — cost efficient
@@ -253,6 +254,7 @@ class ClaudeClient:
                 title=item["title"],
                 description=item["description"],
                 count=item["count"],
+                ticket_ids=item.get("ticket_ids", []),
             )
             for item in items
         ]
@@ -262,3 +264,79 @@ class ClaudeClient:
             total_tickets_analyzed=len(filtered),
             generated_at=datetime.now(timezone.utc),
         )
+
+    def analyze_daily_update(self, tickets: list) -> dict:
+        """Analyze a list of Freshdesk ticket dicts from CSV and group by problem."""
+        import json as _json
+
+        # Build compact ticket list for the prompt
+        lines = []
+        for t in tickets:
+            tid = t.get("Ticket ID", t.get("ticket_id", "?"))
+            subject = t.get("Subject", "")
+            desc = t.get("Description", "")[:400]
+            tags = t.get("Tags", "")
+            product = t.get("Product", "")
+            client = t.get("Client Name", t.get("Full name", ""))
+            platform = t.get("Platform", "")
+            status = t.get("Status", "")
+            lines.append(
+                f"ID={tid} | Client={client} | Platform={platform} | Status={status} | "
+                f"Tags=[{tags}] | Product={product} | Subject={subject} | Desc={desc}"
+            )
+
+        tickets_text = "\n".join(lines)
+
+        prompt = f"""You are analyzing a Freshdesk daily ticket export. Group these tickets by similar problem type and return a JSON report.
+
+TICKET DATA (use ONLY what is explicitly stated here — do NOT invent any information):
+{tickets_text}
+
+INSTRUCTIONS:
+- Group tickets that share the same root problem or issue type
+- Each ticket must belong to exactly one group
+- For each group extract strictly from the data above:
+  * title: short problem label (e.g. "Login Issues", "Video Playback Error")
+  * description: 1-2 sentences describing the pattern
+  * ticket_ids: list of Ticket ID numbers (integers) for tickets in this group
+  * clients: list of unique client/contact names (from "Client=" field)
+  * tags: combined unique tags from all tickets in this group (from "Tags=[...]" field, split by comma)
+  * devices: device names ONLY if explicitly mentioned in Subject or Desc (e.g. iOS, Android, Roku, FireTV, Web, Samsung TV) — empty list if none mentioned
+
+STRICT RULES:
+- Only include devices, tags, clients that appear in the raw data above
+- Do not add tags, devices, or names that are not present
+- ticket_ids must be integers
+- tags must be individual tag strings, not comma-separated
+
+Return ONLY valid JSON, no markdown, no explanation:
+{{
+  "groups": [
+    {{
+      "title": "...",
+      "description": "...",
+      "ticket_ids": [12345, 12346],
+      "clients": ["Name 1", "Name 2"],
+      "tags": ["tag1", "tag2"],
+      "devices": ["iOS", "Android"]
+    }}
+  ]
+}}"""
+
+        response = self.client.messages.create(
+            model=self.SONNET_MODEL,
+            max_tokens=4096,
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw = response.content[0].text.strip()
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.DOTALL).strip()
+
+        try:
+            data = _json.loads(raw)
+            if "groups" not in data:
+                raise ValueError("Missing 'groups' key")
+            return data
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise RuntimeError(f"analyze_daily_update: failed to parse Claude response: {exc}") from exc
