@@ -18,13 +18,14 @@ export function useAuth() {
         password,
       })
 
-      const { access_token, role, username } = response.data
+      const { access_token, role, username: returnedUsername } = response.data
+      const resolvedUsername = returnedUsername || username
 
       localStorage.setItem('token', access_token)
       localStorage.setItem('userRole', role)
-      localStorage.setItem('username', username || '')
+      localStorage.setItem('username', resolvedUsername)
 
-      setUser({ role, username })
+      setUser({ role, username: resolvedUsername })
 
       return { success: true }
     } catch (error) {
