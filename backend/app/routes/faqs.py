@@ -118,8 +118,12 @@ async def upload_faq(
                 from app.services.liv_golf_processor import LivGolfAuditProcessor
                 result = LivGolfAuditProcessor().process(tmp_path)
             else:
-                processor = XlsxProcessor()
-                result = processor.process_xlsx(tmp_path)
+                from app.services.app_store_links_processor import AppStoreLinksProcessor
+                if AppStoreLinksProcessor.detect(tmp_path):
+                    result = AppStoreLinksProcessor().process(tmp_path)
+                else:
+                    processor = XlsxProcessor()
+                    result = processor.process_xlsx(tmp_path)
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type")
     except FileNotFoundError:
