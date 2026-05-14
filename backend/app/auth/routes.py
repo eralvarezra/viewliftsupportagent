@@ -1,5 +1,5 @@
 # backend/app/auth/routes.py
-from datetime import timedelta
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.schemas import LoginRequest, TokenResponse, RegisterRequest, UserResponse
@@ -58,6 +58,15 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=403, detail="Account pending approval. Contact your administrator.")
     if user_status == "inactive" or not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated. Contact your administrator.")
+
+    db = SessionLocal()
+    try:
+        db_user = db.query(User).filter(User.id == user.id).first()
+        if db_user:
+            db_user.last_login = datetime.utcnow()
+            db.commit()
+    finally:
+        db.close()
 
     access_token = create_access_token(
         data={"sub": user.username, "role": user.role}

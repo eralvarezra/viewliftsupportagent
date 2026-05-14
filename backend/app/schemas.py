@@ -51,6 +51,7 @@ class UserAdminItem(BaseModel):
     today_count: int
     daily_goal: int
     monthly_cost: float
+    last_login: datetime | None = None
 
 
 class UserResponse(BaseModel):

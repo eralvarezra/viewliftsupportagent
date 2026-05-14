@@ -53,6 +53,7 @@ async def list_users(
             today_count=today_counts.get(u.id, 0) + offset,
             daily_goal=u.daily_goal or 35,
             monthly_cost=u.monthly_cost or 0.0,
+            last_login=u.last_login,
         ))
     return result
 

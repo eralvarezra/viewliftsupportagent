@@ -257,9 +257,15 @@ export default function Users() {
 
                   {/* Actions */}
                   <div className="flex items-center space-x-2 justify-end">
-                    {/* Joined date */}
-                    <div className="text-xs text-gray-400 dark:text-gray-500 mr-auto">
-                      Joined {new Date(user.created_at).toLocaleDateString()}
+                    {/* Joined / Last login */}
+                    <div className="text-xs text-gray-400 dark:text-gray-500 mr-auto space-y-0.5">
+                      <div>Joined {new Date(user.created_at).toLocaleDateString()}</div>
+                      <div>
+                        Last login:{' '}
+                        {user.last_login
+                          ? new Date(user.last_login + 'Z').toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          : <span className="italic text-gray-300 dark:text-gray-600">never</span>}
+                      </div>
                     </div>
 
                     {user.username !== 'admin' && (
