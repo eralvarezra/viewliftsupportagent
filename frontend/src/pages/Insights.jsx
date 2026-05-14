@@ -424,7 +424,7 @@ function GroupCard({ group, index, trackerDetails, palette = CLIENT_PALETTES[0] 
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tickets</p>
                 <div className="flex flex-wrap gap-1">
                   {group.ticket_ids.map(id => (
-                    <span key={id} className="inline-block px-2 py-0.5 rounded text-xs font-mono border bg-white border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300">#{id}</span>
+                    <a key={id} href={`https://viewlift.freshdesk.com/a/tickets/${id}`} target="_blank" rel="noopener noreferrer" className="inline-block px-2 py-0.5 rounded text-xs font-mono border bg-white border-gray-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 dark:bg-gray-800 dark:border-gray-600 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors">#{id}</a>
                   ))}
                 </div>
               </div>
