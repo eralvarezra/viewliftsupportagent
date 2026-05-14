@@ -103,6 +103,47 @@ function TrackerGroupCard({ tg, trackerDetails }) {
     }
   }
 
+  const [comments, setComments] = useState([])
+  const [commentsLoaded, setCommentsLoaded] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  const [newComment, setNewComment] = useState('')
+  const [posting, setPosting] = useState(false)
+
+  const loadComments = async () => {
+    try {
+      const r = await import('../api/client').then(m => m.default.get('/tracker-comments/' + tg.tracker_id))
+      setComments(r.data)
+      setCommentsLoaded(true)
+    } catch {}
+  }
+
+  const toggleComments = () => {
+    if (!commentsLoaded) loadComments()
+    setShowComments(v => !v)
+  }
+
+  const postComment = async () => {
+    const text = newComment.trim()
+    if (!text) return
+    setPosting(true)
+    try {
+      const r = await import('../api/client').then(m => m.default.post('/tracker-comments/' + tg.tracker_id, { body: text }))
+      setComments(prev => [...prev, r.data])
+      setNewComment('')
+    } catch (err) {
+      import('react-hot-toast').then(({ default: toast }) => toast.error(err.response?.data?.detail || 'Failed to post'))
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  const deleteComment = async (commentId) => {
+    try {
+      await import('../api/client').then(m => m.default.delete('/tracker-comments/' + tg.tracker_id + '/' + commentId))
+      setComments(prev => prev.filter(c => c.id !== commentId))
+    } catch {}
+  }
+
   return (
     <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 overflow-hidden">
       <button
@@ -244,6 +285,69 @@ function TrackerGroupCard({ tg, trackerDetails }) {
 
         </div>
       )}
+
+      {/* Comment section */}
+      <div className="border-t border-red-200 dark:border-red-800 bg-white dark:bg-gray-800/60">
+        <button
+          onClick={toggleComments}
+          className="w-full flex items-center gap-2 px-5 py-2.5 text-left text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          {showComments ? 'Hide comments' : `Comments${comments.length > 0 ? ` (${comments.length})` : ''}`}
+        </button>
+
+        {showComments && (
+          <div className="px-5 pb-4 space-y-3">
+            {!commentsLoaded ? (
+              <p className="text-xs text-gray-400 animate-pulse">Loading…</p>
+            ) : comments.length === 0 ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic">No comments yet. Be the first to leave a note.</p>
+            ) : (
+              <div className="space-y-2">
+                {comments.map(c => (
+                  <div key={c.id} className="flex gap-2.5 group">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 text-xs font-bold flex-shrink-0 mt-0.5">
+                      {c.username.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{c.username}</span>
+                        <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        <button
+                          onClick={() => deleteComment(c.id)}
+                          className="ml-auto text-xs text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete"
+                        >✕</button>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap mt-0.5">{c.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-2">
+              <input
+                type="text"
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment() } }}
+                placeholder="Leave a comment…"
+                className="flex-1 px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                onClick={postComment}
+                disabled={posting || !newComment.trim()}
+                className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              >
+                {posting ? '…' : 'Post'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -58,3 +58,6 @@ from app.routes.freshdesk import router as freshdesk_router
 app.include_router(freshdesk_router, prefix="/api/freshdesk", tags=["freshdesk"])
 from app.routes.settings import router as settings_router
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
+
+from app.routes.tracker_comments import router as tracker_comments_router
+app.include_router(tracker_comments_router, prefix="/api/tracker-comments", tags=["tracker-comments"])

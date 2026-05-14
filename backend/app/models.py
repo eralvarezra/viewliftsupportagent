@@ -123,3 +123,15 @@ class AppSetting(Base):
     __tablename__ = "app_settings"
     key = Column(String, primary_key=True)
     value = Column(String, nullable=False)
+
+
+class TrackerComment(Base):
+    __tablename__ = "tracker_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tracker_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")
