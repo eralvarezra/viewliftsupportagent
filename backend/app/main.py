@@ -12,6 +12,7 @@ from app.routes.insights import router as insights_router
 from app.routes.platforms import router as platforms_router
 from app.routes.ticket_tracker import router as ticket_tracker_router
 from app.routes.daily_update import router as daily_update_router
+from app.routes.reports import router as reports_router
 
 app = FastAPI(
     title="SCHN+ Support Assistant",
@@ -39,6 +40,7 @@ app.include_router(insights_router, prefix="/api/insights", tags=["insights"])
 app.include_router(platforms_router, prefix="/api/platforms", tags=["platforms"])
 app.include_router(ticket_tracker_router, prefix="/api/ticket-tracker", tags=["ticket-tracker"])
 app.include_router(daily_update_router, prefix="/api/daily-update", tags=["daily-update"])
+app.include_router(reports_router, prefix="/api/reports", tags=["reports"])
 
 
 @app.on_event("startup")
@@ -54,3 +56,5 @@ async def health_check():
     return {"status": "healthy"}
 from app.routes.freshdesk import router as freshdesk_router
 app.include_router(freshdesk_router, prefix="/api/freshdesk", tags=["freshdesk"])
+from app.routes.settings import router as settings_router
+app.include_router(settings_router, prefix="/api/settings", tags=["settings"])

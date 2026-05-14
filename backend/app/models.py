@@ -113,6 +113,13 @@ class DailyUpdateReport(Base):
     total_tickets = Column(Integer, default=0)
     total_tracked = Column(Integer, default=0)
     result_json = Column(JSON, nullable=False)
+    cost = Column(Float, default=0.0, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="daily_update_reports")
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+    key = Column(String, primary_key=True)
+    value = Column(String, nullable=False)

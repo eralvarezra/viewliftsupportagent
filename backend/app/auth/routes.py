@@ -65,7 +65,8 @@ async def login(request: LoginRequest):
 
     return TokenResponse(
         access_token=access_token,
-        role=user.role
+        role=user.role,
+        username=user.username
     )
 
 

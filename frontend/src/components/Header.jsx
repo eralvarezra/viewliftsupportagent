@@ -10,14 +10,15 @@ export default function Header() {
   const { dark, toggle } = useDarkMode()
   const { platforms, activePlatform, setActivePlatform } = usePlatform()
   const navigate = useNavigate()
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef(null)
+  const [platformOpen, setPlatformOpen] = useState(false)
+  const [burgerOpen, setBurgerOpen] = useState(false)
+  const platformRef = useRef(null)
+  const burgerRef = useRef(null)
 
   useEffect(() => {
     const handler = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false)
-      }
+      if (platformRef.current && !platformRef.current.contains(e.target)) setPlatformOpen(false)
+      if (burgerRef.current && !burgerRef.current.contains(e.target)) setBurgerOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -29,50 +30,60 @@ export default function Header() {
     navigate('/login')
   }
 
-  const navLinkClass = ({ isActive }) =>
-    `px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+  const navClass = ({ isActive }) =>
+    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
       isActive
         ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
         : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
     }`
 
+  const navLinks = [
+    { to: '/generate', label: 'Generate' },
+    { to: '/history', label: 'History' },
+    { to: '/tracker', label: 'Tracker' },
+    { to: '/insights', label: 'Daily Update' },
+    ...(isAdmin ? [
+      { to: '/faqs', label: 'FAQs' },
+      { to: '/users', label: 'Users' },
+    ] : []),
+    ...(isAdmin && user?.username === 'admin' ? [
+      { to: '/reports', label: 'Reports' },
+    ] : []),
+  ]
+
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-8">
-            <h1 className="text-xl font-bold text-gray-800 dark:text-white">
-              ViewLift Support Assistant
+          <div className="flex items-center gap-6">
+            <h1 className="text-lg font-bold text-gray-800 dark:text-white whitespace-nowrap">
+              ViewLift Support
             </h1>
-            <nav className="flex items-center space-x-2">
-              <NavLink to="/generate" className={navLinkClass}>Generate</NavLink>
-              <NavLink to="/history" className={navLinkClass}>History</NavLink>
-              <NavLink to="/tracker" className={navLinkClass}>Tracker</NavLink>
-              {isAdmin && <NavLink to="/faqs" className={navLinkClass}>FAQs</NavLink>}
-              {isAdmin && <NavLink to="/users" className={navLinkClass}>Users</NavLink>}
-              <NavLink to="/insights" className={navLinkClass}>Daily Update</NavLink>
+            <nav className="hidden lg:flex items-center gap-1">
+              {navLinks.map(({ to, label }) => (
+                <NavLink key={to} to={to} className={navClass}>{label}</NavLink>
+              ))}
             </nav>
           </div>
 
-          <div className="flex items-center space-x-4">
-            {/* Platform selector */}
+          <div className="flex items-center gap-2">
             {activePlatform && platforms.length > 1 && (
-              <div className="relative" ref={dropdownRef}>
+              <div className="relative" ref={platformRef}>
                 <button
-                  onClick={() => setDropdownOpen((o) => !o)}
-                  className="flex items-center space-x-2 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  onClick={() => setPlatformOpen(o => !o)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                 >
-                  <span>{activePlatform.name}</span>
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span className="max-w-[120px] truncate">{activePlatform.name}</span>
+                  <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50">
-                    {platforms.map((p) => (
+                {platformOpen && (
+                  <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-50">
+                    {platforms.map(p => (
                       <button
                         key={p.id}
-                        onClick={() => { setActivePlatform(p); setDropdownOpen(false) }}
+                        onClick={() => { setActivePlatform(p); setPlatformOpen(false) }}
                         className={`w-full text-left px-4 py-2 text-sm first:rounded-t-lg last:rounded-b-lg transition-colors ${
                           p.id === activePlatform.id
                             ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-medium'
@@ -87,16 +98,15 @@ export default function Header() {
               </div>
             )}
             {activePlatform && platforms.length === 1 && (
-              <span className="px-3 py-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+              <span className="hidden sm:inline px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                 {activePlatform.name}
               </span>
             )}
 
-            {/* Dark mode toggle */}
             <button
               onClick={toggle}
               className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
-              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={dark ? 'Light mode' : 'Dark mode'}
             >
               {dark ? (
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -109,24 +119,85 @@ export default function Header() {
               )}
             </button>
 
-            <div className="flex items-center space-x-2">
+            <div className="hidden sm:flex items-center gap-2">
               <span className="text-sm text-gray-500 dark:text-gray-400">{user?.username}</span>
-              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 capitalize">
-                {user?.role || 'unknown'}
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 capitalize">
+                {user?.role || 'user'}
               </span>
             </div>
-            <a
-              href="/profile"
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 rounded-md transition-colors"
-            >
-              Settings
-            </a>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700 rounded-md transition-colors"
-            >
-              Logout
-            </button>
+
+            <div className="relative" ref={burgerRef}>
+              <button
+                onClick={() => setBurgerOpen(o => !o)}
+                className="p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 transition-colors"
+                aria-label="Menu"
+              >
+                {burgerOpen ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
+
+              {burgerOpen && (
+                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                  <div className="lg:hidden border-b border-gray-100 dark:border-gray-700 p-2 space-y-0.5">
+                    {navLinks.map(({ to, label }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        onClick={() => setBurgerOpen(false)}
+                        className={({ isActive }) =>
+                          `block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            isActive
+                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          }`
+                        }
+                      >
+                        {label}
+                      </NavLink>
+                    ))}
+                  </div>
+                  <div className="sm:hidden px-3 py-2 border-b border-gray-100 dark:border-gray-700">
+                    <p className="text-sm font-medium text-gray-800 dark:text-white">{user?.username}</p>
+                    <p className="text-xs text-gray-400 capitalize">{user?.role}</p>
+                  </div>
+                  <div className="p-2 space-y-0.5">
+                    <NavLink
+                      to="/profile"
+                      onClick={() => setBurgerOpen(false)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`
+                      }
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Settings
+                    </NavLink>
+                    <button
+                      onClick={() => { setBurgerOpen(false); handleLogout() }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -32,6 +32,8 @@ export default function Users() {
   const [editingGoal, setEditingGoal] = useState(null)
   const [goalInput, setGoalInput] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [fdEnabled, setFdEnabled] = useState(true)
+  const [fdToggling, setFdToggling] = useState(false)
 
   const fetchUsers = async () => {
     try {
@@ -44,7 +46,12 @@ export default function Users() {
     }
   }
 
-  useEffect(() => { fetchUsers() }, [])
+  useEffect(() => {
+    fetchUsers()
+    client.get('/settings').then(r => {
+      setFdEnabled(r.data?.freshdesk_on_generate !== 'false')
+    }).catch(() => {})
+  }, [])
 
   const cycleStatus = async (user) => {
     setActionLoading(`status-${user.id}`)
@@ -93,6 +100,33 @@ export default function Users() {
     }
   }
 
+  const toggleRole = async (user) => {
+    setActionLoading(`role-${user.id}`)
+    try {
+      const res = await client.patch(`/users/${user.id}/role`)
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: res.data.role } : u))
+      toast.success(`${user.username} is now ${res.data.role}`)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update role')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const toggleFd = async () => {
+    setFdToggling(true)
+    try {
+      const newVal = !fdEnabled
+      await client.patch('/settings/freshdesk_on_generate', { value: String(newVal) })
+      setFdEnabled(newVal)
+      toast.success(`Freshdesk fetch on Generate ${newVal ? 'enabled' : 'disabled'}`)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update setting')
+    } finally {
+      setFdToggling(false)
+    }
+  }
+
   const pendingCount = users.filter(u => u.status === 'pending').length
 
   if (loading) {
@@ -122,6 +156,24 @@ export default function Users() {
               </span>
             </div>
           )}
+        </div>
+
+        {/* App Settings */}
+        <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">App Settings</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-white">Freshdesk Fetch on Generate</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Allow agents to load tickets by ID/URL on the Generate page</p>
+            </div>
+            <button
+              onClick={toggleFd}
+              disabled={fdToggling}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${fdEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${fdEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
         </div>
 
         {/* User Cards */}
@@ -210,6 +262,20 @@ export default function Users() {
                       Joined {new Date(user.created_at).toLocaleDateString()}
                     </div>
 
+                    {user.username !== 'admin' && (
+                      <button
+                        onClick={() => toggleRole(user)}
+                        disabled={actionLoading === `role-${user.id}`}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors disabled:opacity-50 ${
+                          isAdmin
+                            ? 'bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700'
+                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+                        }`}
+                        title={isAdmin ? 'Revoke admin access' : 'Grant admin access'}
+                      >
+                        {actionLoading === `role-${user.id}` ? '...' : isAdmin ? 'Revoke Admin' : 'Make Admin'}
+                      </button>
+                    )}
                     {!isAdmin && (
                       <>
                         {/* Status cycle button */}

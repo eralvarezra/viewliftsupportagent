@@ -3,10 +3,10 @@ import client from '../api/client'
 
 export function useAuth() {
   const [user, setUser] = useState(() => {
-    // Initialize from localStorage if available
     const role = localStorage.getItem('userRole')
+    const username = localStorage.getItem('username')
     if (role) {
-      return { role }
+      return { role, username }
     }
     return null
   })
@@ -18,13 +18,13 @@ export function useAuth() {
         password,
       })
 
-      const { access_token, role } = response.data
+      const { access_token, role, username } = response.data
 
-      // Store token and role in localStorage
       localStorage.setItem('token', access_token)
       localStorage.setItem('userRole', role)
+      localStorage.setItem('username', username || '')
 
-      setUser({ role })
+      setUser({ role, username })
 
       return { success: true }
     } catch (error) {
@@ -37,6 +37,7 @@ export function useAuth() {
     // Clear token and role from localStorage
     localStorage.removeItem('token')
     localStorage.removeItem('userRole')
+    localStorage.removeItem('username')
     setUser(null)
   }, [])
 

@@ -9,6 +9,7 @@ import Users from './pages/Users'
 import Insights from './pages/Insights'
 import Tracker from './pages/Tracker'
 import Profile from './pages/Profile'
+import Reports from './pages/Reports'
 import ProtectedRoute from './components/ProtectedRoute'
 import { PlatformProvider } from './context/PlatformContext'
 
@@ -78,6 +79,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute>
+              <Reports />
             </ProtectedRoute>
           }
         />

@@ -76,4 +76,29 @@ def run_migrations():
         if "is_global" not in cols:
             conn.execute(text("ALTER TABLE platforms ADD COLUMN is_global INTEGER DEFAULT 0 NOT NULL"))
 
+        # Add api_key to users if missing
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        if "api_key" not in cols:
+            # SQLite does not support ADD COLUMN ... UNIQUE; add without constraint
+            conn.execute(text("ALTER TABLE users ADD COLUMN api_key TEXT"))
+
+        # Create ticket_logs table if missing
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS ticket_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                ticket_url TEXT NOT NULL,
+                worked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+
+        # Seed default app settings
+        try:
+            setting_rows = conn.execute(text("SELECT key FROM app_settings")).fetchall()
+            existing_keys = {r[0] for r in setting_rows}
+        except Exception:
+            existing_keys = set()
+        if "freshdesk_on_generate" not in existing_keys:
+            conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('freshdesk_on_generate', 'true')"))
         conn.commit()

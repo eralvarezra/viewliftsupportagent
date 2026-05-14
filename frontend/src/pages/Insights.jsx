@@ -70,7 +70,32 @@ const getClientPalette = (clientName) => {
 
 function TrackerGroupCard({ tg, trackerDetails }) {
   const [open, setOpen] = useState(true)
-  const details = trackerDetails?.[tg.tracker_id] || {}
+  const [liveData, setLiveData] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const details = liveData || trackerDetails?.[tg.tracker_id] || {}
+  const latestNote = details.latest_note || null
+  const totalLinked = details.total_linked ?? tg.ticket_ids.length
+
+  const fmtDate = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const refresh = async (e) => {
+    e.stopPropagation()
+    setRefreshing(true)
+    try {
+      const r = await import('../api/client').then(m => m.default.get('/freshdesk/tracker/' + tg.tracker_id))
+      setLiveData(r.data)
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Failed to refresh tracker'
+      import('react-hot-toast').then(({ default: toast }) => toast.error(msg))
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   return (
     <div className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 overflow-hidden">
@@ -85,46 +110,105 @@ function TrackerGroupCard({ tg, trackerDetails }) {
           <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
             #{tg.tracker_id} — {tg.subject}
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Status: {tg.status} · {tg.ticket_ids.length} ticket{tg.ticket_ids.length !== 1 ? 's' : ''} from today linked to this tracker
-          </p>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            <span className="text-xs text-gray-500 dark:text-gray-400">Status: {tg.status}</span>
+            <span className="text-xs text-red-600 dark:text-red-400 font-medium">{tg.ticket_ids.length} new today</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{totalLinked} total linked</span>
+            {latestNote && <span className="text-xs text-gray-500 dark:text-gray-400">has latest update</span>}
+          </div>
         </div>
         <a
           href={tg.url}
           target="_blank"
           rel="noopener noreferrer"
           onClick={e => e.stopPropagation()}
-          className="flex-shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline mr-2"
+          className="flex-shrink-0 text-xs text-blue-600 dark:text-blue-400 hover:underline"
         >
           Open ↗
         </a>
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          title="Refresh tracker updates"
+          className="flex-shrink-0 p-1 rounded text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors disabled:opacity-40"
+        >
+          <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
         <svg className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
-        <div className="px-5 pb-4 pt-1 border-t border-red-200 dark:border-red-700 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tickets from today's CSV</p>
-              <div className="flex flex-wrap gap-1">
-                {tg.ticket_ids.map(id => (
-                  <a
-                    key={id}
-                    href={`https://viewlift.freshdesk.com/a/tickets/${id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-red-200 dark:border-red-600 text-xs font-mono text-red-700 dark:text-red-300 hover:underline"
-                  >
-                    #{id}
-                  </a>
-                ))}
-              </div>
+        <div className="px-5 pb-4 pt-3 border-t border-red-200 dark:border-red-700 space-y-4">
+
+          {/* Stats row */}
+          <div className="flex items-center gap-4 flex-wrap justify-between">
+            <div className="text-center">
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">{tg.ticket_ids.length}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">New today</p>
             </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-gray-700 dark:text-gray-300">{totalLinked}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Total linked</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-gray-700 dark:text-gray-300">{latestNote ? '1' : '—'}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Latest update</p>
+            </div>
+          </div>
+          {liveData && (
+            <p className="text-xs text-green-600 dark:text-green-400">✓ Live data — refreshed just now</p>
+          )}
+
+          <div className="space-y-3">
+            {/* All linked tickets */}
+            {(() => {
+              const todaySet = new Set(tg.ticket_ids)
+              const allIds = details.all_linked_ids || []
+              const otherIds = allIds.filter(id => !todaySet.has(id))
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                      From today's CSV <span className="text-red-500">({tg.ticket_ids.length})</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {tg.ticket_ids.map(id => (
+                        <a key={id} href={`https://viewlift.freshdesk.com/a/tickets/${id}`} target="_blank" rel="noopener noreferrer"
+                          className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-red-300 dark:border-red-600 text-xs font-mono text-red-700 dark:text-red-300 hover:underline font-semibold">
+                          #{id}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+
+                  {otherIds.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                        Other linked tickets <span className="text-gray-400">({otherIds.length})</span>
+                      </p>
+                      <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                        {otherIds.map(id => (
+                          <a key={id} href={`https://viewlift.freshdesk.com/a/tickets/${id}`} target="_blank" rel="noopener noreferrer"
+                            className="inline-block px-2 py-0.5 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-xs font-mono text-gray-600 dark:text-gray-400 hover:underline">
+                            #{id}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Tags */}
             {tg.tags?.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tracker Tags</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Tags</p>
                 <div className="flex flex-wrap gap-1">
                   {tg.tags.map(tag => (
                     <span key={tag} className="inline-block px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-xs text-red-700 dark:text-red-300">
@@ -135,6 +219,23 @@ function TrackerGroupCard({ tg, trackerDetails }) {
               </div>
             )}
           </div>
+
+          {/* Latest note */}
+          {latestNote && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Latest Update</p>
+              <div className={`rounded-md px-3 py-2 text-xs border ${latestNote.is_private ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700' : latestNote.incoming ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`font-semibold ${latestNote.is_private ? 'text-yellow-700 dark:text-yellow-400' : latestNote.incoming ? 'text-gray-600 dark:text-gray-400' : 'text-blue-700 dark:text-blue-400'}`}>
+                    {latestNote.is_private ? '🔒 Internal Note' : latestNote.incoming ? '👤 Customer' : '🎧 Agent'}
+                  </span>
+                  <span className="text-gray-400">{fmtDate(latestNote.created_at)}</span>
+                </div>
+                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{latestNote.body}</p>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </div>

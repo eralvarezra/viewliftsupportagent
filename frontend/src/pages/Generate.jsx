@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Layout from '../components/Layout'
 import client from '../api/client'
 import toast from 'react-hot-toast'
@@ -25,11 +25,17 @@ export default function Generate() {
   const [fdInput, setFdInput] = useState('')
   const [fdTicket, setFdTicket] = useState(null)
   const [fdLoading, setFdLoading] = useState(false)
+  const [fdRateLimit, setFdRateLimit] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('fd_rate_limit') || 'null') } catch { return null }
+  })
+  const [rlCountdown, setRlCountdown] = useState(null)
+  const rlTimerRef = useRef(null)
   const [needsVerification, setNeedsVerification] = useState(false)
   const [faqSources, setFaqSources] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [fdEnabled, setFdEnabled] = useState(true)
 
   const { activePlatform } = usePlatform()
 
@@ -37,6 +43,12 @@ export default function Generate() {
   const [trackerStats, setTrackerStats] = useState({ today_count: 0, daily_goal: 35 })
   const [trackerPage, setTrackerPage] = useState(1)
   const TRACKER_PAGE_SIZE = 10
+
+  useEffect(() => {
+    client.get('/settings').then(r => {
+      setFdEnabled(r.data?.freshdesk_on_generate !== 'false')
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     async function loadTracker() {
@@ -204,6 +216,33 @@ export default function Generate() {
     }
   }
 
+  const updateRateLimit = (remaining, total) => {
+    if (remaining == null) return
+    const now = Date.now()
+    setFdRateLimit(prev => {
+      // If remaining went up or no resetAt yet, start a new 1-hour window
+      const resetAt = (!prev || !prev.resetAt || remaining > (prev.remaining ?? 0))
+        ? now + 3600 * 1000
+        : prev.resetAt
+      const next = { remaining, total: total || 5000, resetAt }
+      localStorage.setItem('fd_rate_limit', JSON.stringify(next))
+      return next
+    })
+  }
+
+  useEffect(() => {
+    if (rlTimerRef.current) clearInterval(rlTimerRef.current)
+    if (!fdRateLimit?.resetAt) { setRlCountdown(null); return }
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((fdRateLimit.resetAt - Date.now()) / 1000))
+      setRlCountdown(diff)
+      if (diff === 0) clearInterval(rlTimerRef.current)
+    }
+    tick()
+    rlTimerRef.current = setInterval(tick, 1000)
+    return () => clearInterval(rlTimerRef.current)
+  }, [fdRateLimit])
+
   const loadFdTicket = async () => {
     const match = fdInput.match(/\/tickets\/(\d+)/) || fdInput.match(/^(\d+)$/)
     if (!match) { toast.error('Enter a valid ticket ID or URL'); return }
@@ -213,6 +252,7 @@ export default function Generate() {
       const r = await client.get(`/freshdesk/ticket/${id}`)
       setFdTicket(r.data)
       setCustomerMessage(r.data.full_thread || r.data.description)
+      updateRateLimit(r.data.rate_limit_remaining, r.data.rate_limit_total)
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to load ticket')
     } finally {
@@ -249,22 +289,52 @@ export default function Generate() {
         {/* Left Panel - Input */}
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            {/* Freshdesk Rate Limit widget */}
+            {fdRateLimit && fdRateLimit.remaining != null && (
+              <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Freshdesk API Calls</span>
+                  <span className={`text-xs font-bold ${fdRateLimit.remaining < 500 ? 'text-red-500' : fdRateLimit.remaining < 1500 ? 'text-yellow-500' : 'text-green-600 dark:text-green-400'}`}>
+                    {fdRateLimit.remaining.toLocaleString()} / {fdRateLimit.total.toLocaleString()}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mb-1.5">
+                  <div
+                    className={`h-1.5 rounded-full transition-all ${fdRateLimit.remaining < 500 ? 'bg-red-500' : fdRateLimit.remaining < 1500 ? 'bg-yellow-400' : 'bg-green-500'}`}
+                    style={{ width: (fdRateLimit.remaining / fdRateLimit.total * 100) + '%' }}
+                  />
+                </div>
+                {rlCountdown != null && rlCountdown > 0 && (
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    Resets in {Math.floor(rlCountdown / 60)}m {rlCountdown % 60}s
+                  </p>
+                )}
+                {rlCountdown === 0 && (
+                  <p className="text-xs text-green-500">Rate limit reset</p>
+                )}
+              </div>
+            )}
+
             {/* Mode tabs */}
             <div className="flex items-center justify-between mb-4">
-              <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-xs font-medium">
-                <button
-                  onClick={() => setInputMode('manual')}
-                  className={`px-3 py-1.5 transition-colors ${inputMode === 'manual' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                >
-                  Manual
-                </button>
-                <button
-                  onClick={() => setInputMode('freshdesk')}
-                  className={`px-3 py-1.5 transition-colors border-l border-gray-200 dark:border-gray-600 ${inputMode === 'freshdesk' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                >
-                  Freshdesk Ticket
-                </button>
-              </div>
+              {fdEnabled ? (
+                <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-xs font-medium">
+                  <button
+                    onClick={() => setInputMode('manual')}
+                    className={`px-3 py-1.5 transition-colors ${inputMode === 'manual' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    onClick={() => setInputMode('freshdesk')}
+                    className={`px-3 py-1.5 transition-colors border-l border-gray-200 dark:border-gray-600 ${inputMode === 'freshdesk' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                  >
+                    Freshdesk Ticket
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs font-medium text-gray-400 dark:text-gray-500">Manual input</span>
+              )}
               <button onClick={handleClear} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Clear</button>
             </div>
 

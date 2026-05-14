@@ -16,6 +16,9 @@ from app.config import settings
 
 router = APIRouter()
 
+_SONNET_IN  = 3.00  / 1_000_000
+_SONNET_OUT = 15.00 / 1_000_000
+
 MAX_TICKETS = 300
 FRESHDESK_BASE = f"https://{settings.FRESHDESK_DOMAIN}/api/v2"
 FRESHDESK_AUTH = (settings.FRESHDESK_API_KEY, "X")
@@ -23,8 +26,9 @@ FRESHDESK_AUTH = (settings.FRESHDESK_API_KEY, "X")
 
 
 
-def _fetch_ticket(ticket_id: int) -> dict | None:
+def _fetch_ticket(ticket_id: int, auth=None) -> dict | None:
     import time
+    _auth = auth or FRESHDESK_AUTH
     for attempt in range(3):
         try:
             r = requests.get(
@@ -60,7 +64,7 @@ def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
     # Fetch all ticket details in parallel (max 10 workers)
     ticket_data = {}
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(_fetch_ticket, tid): tid for tid in ticket_ids}
+        futures = {executor.submit(_fetch_ticket, tid, _auth): tid for tid in ticket_ids}
         for future in as_completed(futures):
             tid = futures[future]
             data = future.result()
@@ -75,19 +79,58 @@ def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
             if assoc:
                 tracker_ids_needed.add(assoc[0])
 
-    # Fetch tracker details in parallel
+    def _fetch_tracker_conversations(tr_id: int, auth=None) -> list:
+        try:
+            r = requests.get(
+                f"{FRESHDESK_BASE}/tickets/{tr_id}/conversations",
+                auth=auth or FRESHDESK_AUTH,
+                timeout=10,
+            )
+            return r.json() if r.status_code == 200 else []
+        except Exception:
+            return []
+
+    # Fetch tracker details + conversations in parallel
+    tracker_raw = {}
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(_fetch_ticket, tr_id): tr_id for tr_id in tracker_ids_needed}
+        futures = {executor.submit(_fetch_ticket, tr_id, _auth): tr_id for tr_id in tracker_ids_needed}
         for future in as_completed(futures):
             tr_id = futures[future]
             data = future.result()
             if data:
-                tracker_cache[tr_id] = {
-                    "subject": data.get("subject", f"Tracker #{tr_id}"),
-                    "status": STATUS_MAP.get(data.get("status"), f"Status {data.get('status')}"),
-                    "tags": data.get("tags", []),
-                    "url": f"https://{settings.FRESHDESK_DOMAIN}/a/tickets/{tr_id}",
-                }
+                tracker_raw[tr_id] = data
+
+    conv_futures = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        conv_futures = {executor.submit(_fetch_tracker_conversations, tr_id, _auth): tr_id for tr_id in tracker_raw}
+        tracker_convs = {}
+        for future in as_completed(conv_futures):
+            tr_id = conv_futures[future]
+            tracker_convs[tr_id] = future.result()
+
+    for tr_id, data in tracker_raw.items():
+        convs = tracker_convs.get(tr_id, [])
+        latest_note = None
+        for c in reversed(convs):
+            body = c.get("body_text", "").strip()
+            if not body:
+                continue
+            latest_note = {
+                "body": body[:500],
+                "is_private": c.get("private", False),
+                "created_at": c.get("created_at", ""),
+                "incoming": c.get("incoming", False),
+            }
+            break
+        tracker_cache[tr_id] = {
+            "subject": data.get("subject", f"Tracker #{tr_id}"),
+            "status": STATUS_MAP.get(data.get("status"), f"Status {data.get('status')}"),
+            "tags": data.get("tags", []),
+            "url": f"https://{settings.FRESHDESK_DOMAIN}/a/tickets/{tr_id}",
+            "total_linked": len(data.get("associated_tickets_list", [])),
+            "all_linked_ids": data.get("associated_tickets_list", []),
+            "latest_note": latest_note,
+        }
 
     # Build result mapping
     for tid, data in ticket_data.items():
@@ -154,7 +197,7 @@ async def analyze_daily_update(
 
     # 3. Run Claude analysis
     claude = ClaudeClient(api_key=settings.ANTHROPIC_API_KEY)
-    result = claude.analyze_daily_update(tickets)
+    result, du_tokens = claude.analyze_daily_update(tickets)
 
     # 4. Annotate groups with tracker info
     for group in result.get("groups", []):
@@ -174,12 +217,14 @@ async def analyze_daily_update(
     result["filename"] = file.filename or "upload.csv"
 
     # 6. Save to DB
+    du_cost = du_tokens["input"] * _SONNET_IN + du_tokens["output"] * _SONNET_OUT
     report = DailyUpdateReport(
         user_id=current_user.id,
         filename=file.filename or "upload.csv",
         total_tickets=len(tickets),
         total_tracked=total_with_tracker,
         result_json=result,
+        cost=du_cost,
     )
     db.add(report)
     db.commit()

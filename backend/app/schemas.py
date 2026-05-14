@@ -14,6 +14,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     role: str
+    username: str
 
 
 class UserCreate(BaseModel):
@@ -172,6 +173,7 @@ class TrendItem(BaseModel):
     title: str
     description: str
     count: int
+    ticket_ids: List[int] = []
 
 
 class TrendsResponse(BaseModel):

@@ -142,6 +142,48 @@ def update_freshdesk_key(
     db: Session = Depends(get_db),
 ):
     key = body.get("freshdesk_api_key", "").strip()
-    current_user.freshdesk_api_key = key or None
+    user = db.query(User).filter(User.id == current_user.id).first()
+    user.freshdesk_api_key = key or None
     db.commit()
-    return {"ok": True, "freshdesk_api_key": current_user.freshdesk_api_key or ""}
+    return {"ok": True, "freshdesk_api_key": user.freshdesk_api_key or ""}
+
+
+@router.get("/me/api-key")
+def get_my_api_key(
+    current_user: User = Depends(get_current_user),
+):
+    return {"api_key": current_user.api_key or ""}
+
+
+@router.post("/me/api-key")
+def generate_my_api_key(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    import secrets
+    user = db.query(User).filter(User.id == current_user.id).first()
+    user.api_key = secrets.token_hex(32)
+    db.commit()
+    return {"api_key": user.api_key}
+
+
+
+@router.patch("/{user_id}/role")
+async def toggle_user_role(
+    user_id: int,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.username == "admin":
+        raise HTTPException(status_code=400, detail="Cannot change the root admin role")
+
+    user.role = "admin" if user.role != "admin" else "agent"
+    db.commit()
+    return {"id": user.id, "username": user.username, "role": user.role}
