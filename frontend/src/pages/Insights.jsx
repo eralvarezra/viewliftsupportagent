@@ -70,12 +70,16 @@ const getClientPalette = (clientName) => {
 
 function TrackerGroupCard({ tg, trackerDetails }) {
   const [open, setOpen] = useState(true)
-  const [liveData, setLiveData] = useState(null)
+  const LS_KEY = `tracker_live_${tg.tracker_id}`
+  const [liveData, setLiveData] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) } catch { return null }
+  })
   const [refreshing, setRefreshing] = useState(false)
 
-  const details = liveData || trackerDetails?.[tg.tracker_id] || {}
+  const details = liveData?.data || trackerDetails?.[tg.tracker_id] || {}
   const latestNote = details.latest_note || null
   const totalLinked = details.total_linked ?? tg.ticket_ids.length
+  const refreshedAt = liveData?.refreshedAt || null
 
   const fmtDate = (iso) => {
     if (!iso) return ''
@@ -88,7 +92,9 @@ function TrackerGroupCard({ tg, trackerDetails }) {
     setRefreshing(true)
     try {
       const r = await import('../api/client').then(m => m.default.get('/freshdesk/tracker/' + tg.tracker_id))
-      setLiveData(r.data)
+      const stored = { data: r.data, refreshedAt: new Date().toISOString() }
+      localStorage.setItem(LS_KEY, JSON.stringify(stored))
+      setLiveData(stored)
     } catch (err) {
       const msg = err.response?.data?.detail || 'Failed to refresh tracker'
       import('react-hot-toast').then(({ default: toast }) => toast.error(msg))
