@@ -7,7 +7,7 @@ export function PlatformProvider({ children }) {
   const [platforms, setPlatforms] = useState([])
   const [activePlatform, setActivePlatformState] = useState(null)
 
-  useEffect(() => {
+  const loadPlatforms = () => {
     client.get('/platforms/').then((res) => {
       const list = res.data
       setPlatforms(list)
@@ -15,10 +15,12 @@ export function PlatformProvider({ children }) {
 
       const savedId = parseInt(localStorage.getItem('selectedPlatformId'), 10)
       const saved = list.find((p) => p.id === savedId)
-      setActivePlatformState(saved || list[0])
-    }).catch(() => {
-      // token not ready yet — pages will re-trigger on auth
-    })
+      setActivePlatformState(prev => prev || saved || list[0])
+    }).catch(() => {})
+  }
+
+  useEffect(() => {
+    loadPlatforms()
   }, [])
 
   const setActivePlatform = (platform) => {
