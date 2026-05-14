@@ -105,7 +105,8 @@ async def register(request: RegisterRequest):
 
         return TokenResponse(
             access_token="pending",
-            role="pending"
+            role="pending",
+            username=""
         )
     finally:
         db.close()
