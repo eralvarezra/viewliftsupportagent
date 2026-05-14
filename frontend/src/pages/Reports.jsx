@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Layout from '../components/Layout'
 import client from '../api/client'
 import toast from 'react-hot-toast'
 
 const PERIODS = ['today', 'week', 'month', 'total']
 const PERIOD_LABELS = { today: 'Today', week: 'This Week', month: 'This Month', total: 'All Time' }
+const POLL_INTERVAL = 30_000
 
 const fmt$ = (n) => n == null ? '—' : '$' + (n || 0).toFixed(4)
 const totalCost = (data) => data.reduce((s, u) => s + (u.cost?.responses_month || 0) + (u.cost?.daily_updates_month || 0), 0)
@@ -13,22 +14,62 @@ export default function Reports() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState('week')
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const intervalRef = useRef(null)
 
-  useEffect(() => {
-    client.get('/reports/usage')
-      .then(r => setData(r.data))
-      .catch(() => toast.error('Failed to load report'))
-      .finally(() => setLoading(false))
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true)
+    try {
+      const r = await client.get('/reports/usage')
+      setData(r.data)
+      setLastUpdated(new Date())
+    } catch {
+      if (!silent) toast.error('Failed to load report')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
 
+  useEffect(() => {
+    fetchData(false)
+    intervalRef.current = setInterval(() => fetchData(true), POLL_INTERVAL)
+    return () => clearInterval(intervalRef.current)
+  }, [fetchData])
+
   const total = (key) => data.reduce((s, u) => s + (u[key]?.[period] || 0), 0)
+
+  const timeAgo = () => {
+    if (!lastUpdated) return ''
+    const secs = Math.floor((Date.now() - lastUpdated) / 1000)
+    if (secs < 5) return 'just now'
+    if (secs < 60) return `${secs}s ago`
+    return `${Math.floor(secs / 60)}m ago`
+  }
 
   return (
     <Layout>
       <div className="mb-6 flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Usage Reports</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Agent activity breakdown</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              Live · updates every 30s
+              {lastUpdated && <span className="ml-1 text-gray-400 dark:text-gray-500">· {timeAgo()}</span>}
+            </p>
+            <button
+              onClick={() => fetchData(false)}
+              disabled={refreshing}
+              className="ml-1 text-xs text-blue-500 hover:text-blue-700 disabled:opacity-40 transition-colors"
+            >
+              {refreshing ? 'Refreshing…' : '↻ Refresh'}
+            </button>
+          </div>
         </div>
         <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden text-xs font-medium">
           {PERIODS.map(p => (
@@ -51,7 +92,7 @@ export default function Reports() {
         ].map(({ label, key, color }) => (
           <div key={key} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-            <p className={`text-3xl font-bold text-${color}-600 dark:text-${color}-400`}>{loading ? '—' : total(key)}</p>
+            <p className={`text-3xl font-bold text-${color}-600 dark:text-${color}-400 transition-all`}>{loading ? '—' : total(key)}</p>
             <p className="text-xs text-gray-400 mt-1">{PERIOD_LABELS[period]}</p>
           </div>
         ))}
