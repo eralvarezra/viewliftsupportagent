@@ -188,3 +188,25 @@ async def toggle_user_role(
     user.role = "admin" if user.role != "admin" else "agent"
     db.commit()
     return {"id": user.id, "username": user.username, "role": user.role}
+
+
+@router.put("/me/username")
+def update_username(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    new_username = (body.get("username") or "").strip()
+    if not new_username:
+        raise HTTPException(status_code=400, detail="Username cannot be empty")
+    if len(new_username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if len(new_username) > 40:
+        raise HTTPException(status_code=400, detail="Username must be 40 characters or less")
+    existing = db.query(User).filter(User.username == new_username).first()
+    if existing and existing.id != current_user.id:
+        raise HTTPException(status_code=409, detail="Username already taken")
+    user = db.query(User).filter(User.id == current_user.id).first()
+    user.username = new_username
+    db.commit()
+    return {"username": user.username}
