@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import client from '../api/client'
 
 export function useAuth() {
@@ -45,6 +45,17 @@ export function useAuth() {
   const isAuthenticated = !!user
 
   const isAdmin = user?.role === 'admin'
+
+  // If authenticated but username missing (old session), fetch from API
+  useEffect(() => {
+    if (user && !user.username) {
+      client.get('/users/me').then(r => {
+        const username = r.data.username || ''
+        localStorage.setItem('username', username)
+        setUser(prev => prev ? { ...prev, username } : prev)
+      }).catch(() => {})
+    }
+  }, [user])
 
   return {
     user,
