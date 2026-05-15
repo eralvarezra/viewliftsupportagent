@@ -290,7 +290,7 @@ export default function Generate() {
         <div className="space-y-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             {/* Freshdesk Rate Limit widget */}
-            {fdRateLimit && fdRateLimit.remaining != null && (
+            {fdEnabled && fdRateLimit && fdRateLimit.remaining != null && (
               <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-medium text-gray-600 dark:text-gray-300">Freshdesk API Calls</span>
