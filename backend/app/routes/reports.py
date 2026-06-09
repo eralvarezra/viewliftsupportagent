@@ -14,7 +14,7 @@ def get_usage_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if current_user.username != "admin":
+    if not getattr(current_user, "is_superadmin", False):
         raise HTTPException(status_code=403, detail="Not authorized")
     users = db.query(User).filter(User.status != 'inactive').order_by(User.username).all()
 
@@ -76,9 +76,12 @@ def get_usage_report(
                 "total": tl_count(datetime(2000, 1, 1)),
             },
             "cost": {
+                "today":  round(du_cost(today_start), 4),
+                "week":   round(du_cost(week_start), 4),
+                "month":  round((resp_cost_month or 0.0) + du_cost(month_start), 4),
+                "total":  round((resp_cost_month or 0.0) + du_cost(datetime(2000, 1, 1)), 4),
                 "responses_month": round(resp_cost_month or 0.0, 4),
                 "daily_updates_month": round(du_cost(month_start), 4),
-                "daily_updates_total": round(du_cost(datetime(2000, 1, 1)), 4),
             },
         })
 

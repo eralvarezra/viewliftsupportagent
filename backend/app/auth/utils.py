@@ -68,19 +68,27 @@ def decode_token(token: str) -> Optional[dict]:
 
 
 def create_admin_user():
-    """Create default admin user if not exists."""
+    """Create default admin user if not exists. Also ensure superadmin flag is set."""
     db = SessionLocal()
     try:
+        # Check by username first, then by email (handles renamed admin)
         admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            admin = db.query(User).filter(User.email == "admin@schn.local").first()
         if not admin:
             admin = User(
                 username="admin",
                 email="admin@schn.local",
                 password_hash=get_password_hash(settings.ADMIN_PASSWORD),
                 role="admin",
+                is_superadmin=True,
                 groq_api_key=None
             )
             db.add(admin)
+            db.commit()
+        elif not getattr(admin, "is_superadmin", False):
+            # Ensure the original admin has superadmin flag set
+            admin.is_superadmin = True
             db.commit()
     finally:
         db.close()

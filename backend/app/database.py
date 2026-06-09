@@ -101,4 +101,9 @@ def run_migrations():
             existing_keys = set()
         if "freshdesk_on_generate" not in existing_keys:
             conn.execute(text("INSERT INTO app_settings (key, value) VALUES ('freshdesk_on_generate', 'true')"))
+        # Add is_superadmin column to users if missing; set user id=1 as superadmin
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        if "is_superadmin" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_superadmin INTEGER DEFAULT 0 NOT NULL"))
+            conn.execute(text("UPDATE users SET is_superadmin = 1 WHERE id = 1"))
         conn.commit()

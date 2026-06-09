@@ -61,3 +61,6 @@ app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 
 from app.routes.tracker_comments import router as tracker_comments_router
 app.include_router(tracker_comments_router, prefix="/api/tracker-comments", tags=["tracker-comments"])
+
+from app.routes.canned_responses import router as canned_responses_router
+app.include_router(canned_responses_router, prefix="/api/canned-responses", tags=["canned-responses"])

@@ -9,18 +9,55 @@ from sqlalchemy.orm import Session
 from app.auth.routes import get_current_user
 from app.config import settings
 from app.database import get_db
-from app.models import User, FAQChunk, FAQDocument, ResponseHistory, Platform
-from app.schemas import GenerateRequest, GenerateResponse, FAQSource
+from app.models import User, FAQChunk, FAQDocument, ResponseHistory, Platform, CannedResponse
+from app.schemas import GenerateRequest, GenerateResponse, FAQSource, CannedSource
 from app.services.claude_client import ClaudeClient
 from app.services.local_embeddings import LocalEmbeddingService
 from app.services.zipcode_service import ZipcodeService
+from app.services.canned_response_service import CannedResponseService
 
-_HAIKU_IN   = 0.80  / 1_000_000
-_HAIKU_OUT  = 4.00  / 1_000_000
-_SONNET_IN  = 3.00  / 1_000_000
-_SONNET_OUT = 15.00 / 1_000_000
+_HAIKU_IN          = 0.80  / 1_000_000
+_HAIKU_OUT         = 4.00  / 1_000_000
+_SONNET_IN         = 3.00  / 1_000_000
+_SONNET_OUT        = 15.00 / 1_000_000
+_SONNET_CACHE_WRITE = 3.75  / 1_000_000   # prompt cache write (25% premium)
+_SONNET_CACHE_READ  = 0.30  / 1_000_000   # prompt cache read (90% discount)
 
 router = APIRouter()
+
+_RESOLVED_PATTERNS = re.compile(
+    r'\b('
+    # Issue is fixed/working
+    r'it(?:\'s| is) (?:working|fixed|resolved|fine|good now)|'
+    r'(?:problem|issue|it) (?:is |was )?(?:resolved|fixed|solved)|'
+    r'(?:works?|working) (?:now|again|fine|great|perfect)|'
+    r'(?:all )?(?:good|great|fine|ok|okay) now|'
+    # No longer needs support
+    r'no longer (?:need|require|want)s? (?:help|support|assistance|this)|'
+    r'no longer (?:an? )?issue|'
+    r'don\'?t? need (?:help|support|assistance|this) (?:any ?more|any ?longer)|'
+    r'(?:no longer|don\'?t?) need(?:ed)? (?:help|support|assistance)|'
+    r'(?:support|assistance|help) (?:is )?no longer (?:needed|required|necessary)|'
+    r'(?:no longer|not) required|'
+    r'cancel (?:my )?(?:request|ticket|case)|'
+    r'(?:please )?(?:close|disregard|ignore) (?:this )?(?:ticket|case|request)|'
+    r'(?:we|you) can close|'
+    r'never ?mind|'
+    r'i(?:\'ll| will) (?:figure|handle|manage|take care of) it|'
+    r'(?:already |i\'ve )?(?:figured|sorted|handled|resolved|fixed) it(?: out)?|'
+    r'not (?:an? )?issue (?:any ?more|any ?longer)|'
+    # Gratitude + resolution signals
+    r'thank(?:s| you).{0,60}(?:fixed|resolved|working|solved|no longer|figured|sorted)|'
+    r'(?:fixed|resolved|solved|working|figured|sorted).{0,60}thank(?:s| you)|'
+    r'thank(?:s| you)[,.]? (?:that|this|it) (?:worked|did it|fixed it|solved it)|'
+    # Spanish
+    r'ya (?:funciona|resolvió|quedó|está bien|no necesito|lo resolví|lo arreglé)|'
+    r'(?:ya|todo) (?:está |esta )?(?:bien|funcionando|resuelto|arreglado)|'
+    r'ya no (?:necesito|requiero|necesita|requiere) (?:ayuda|soporte|asistencia)|'
+    r'pueden cerrar|no es necesario|ya lo (?:resolví|arreglé|solucioné)'
+    r')\b',
+    re.IGNORECASE,
+)
 
 
 def _parse_response_sections(raw: str) -> Tuple[Optional[str], Optional[str], Optional[str], bool]:
@@ -90,6 +127,7 @@ async def generate(
     claude = ClaudeClient(api_key=api_key)
     embedding_service = LocalEmbeddingService()
     zipcode_service = ZipcodeService()
+    canned_response_service = CannedResponseService()
 
     # Step 0: Fetch platform name and cms_url
     platform = db.query(Platform).filter(Platform.id == request.platform_id).first()
@@ -107,6 +145,29 @@ async def generate(
         request.message,
         images=images_dicts,
     )
+
+    # Step 1b: Detect "issue resolved" messages → return B2C Last Response directly
+    check_text = f"{request.message} {parsed_data.problem_summary or ''}"
+    if _RESOLVED_PATTERNS.search(check_text):
+        last_response = db.query(CannedResponse).filter(
+            CannedResponse.title == "B2C Last Response"
+        ).first()
+        if last_response:
+            response_text = last_response.content
+            db.add(ResponseHistory(
+                user_id=current_user.id,
+                customer_name=parsed_data.customer_name,
+                customer_message=request.message,
+                parsed_data={"ticket_type": "resolved"},
+                generated_response=response_text,
+                platform_id=request.platform_id,
+            ))
+            db.commit()
+            return GenerateResponse(
+                parsed=parsed_data,
+                response=response_text,
+                canned_sources=[{"title": last_response.title, "similarity": 1.0}],
+            )
 
     # Determine which platform's FAQ chunks to search
     B2C_PLATFORM_ID = 9
@@ -161,10 +222,38 @@ async def generate(
             ))
         faq_context = "\n\n---\n\n".join(parts)
 
-    # Step 5b: ZIP code exact lookup
-    zipcode_context = zipcode_service.get_coverage_context(request.message, db, request.platform_id)
-    if zipcode_context:
-        faq_context = (zipcode_context + "\n\n" + faq_context).strip()
+    # Step 5b: ZIP code exact lookup — search both raw message and parsed context
+    zip_search_text = request.message
+    if parsed_data.context:
+        zip_search_text = request.message + " " + parsed_data.context
+    zipcode_context = zipcode_service.get_coverage_context(zip_search_text, db, request.platform_id)
+
+    # Step 5c: Platform location rules (always injected — not semantic search)
+    location_rules_block = ""
+    if platform and platform.location_rules:
+        location_rules_block = "LOCATION RULES (always apply these):\n" + platform.location_rules.strip()
+
+    if location_rules_block or zipcode_context:
+        prefix_parts = []
+        if location_rules_block:
+            prefix_parts.append(location_rules_block)
+        if zipcode_context:
+            prefix_parts.append(zipcode_context)
+        faq_context = ("\n\n".join(prefix_parts) + "\n\n" + faq_context).strip()
+
+    # Step 5d: Canned response semantic lookup (platform-specific + B2C General)
+    canned_matches = canned_response_service.find_relevant(
+        query_embedding=query_embedding,
+        platform_id=request.platform_id,
+        db=db,
+    )
+    canned_sources = []
+    if canned_matches:
+        canned_block = "CANNED RESPONSES (use these verbatim when applicable — highest priority):\n"
+        for title, content, score in canned_matches:
+            canned_block += f"\n[{title}]\n{content}\n"
+            canned_sources.append({"title": title, "similarity": round(score, 3)})
+        faq_context = (canned_block + "\n\n" + faq_context).strip()
 
     # account_number is excluded from billing context to prevent the model from
     # using it to infer payment handler (e.g. "apple-xxx" prefix is a CMS artifact, not Apple billing)
@@ -225,7 +314,12 @@ async def generate(
         platform_id=request.platform_id,
     ))
     haiku_cost = parse_tokens["input"] * _HAIKU_IN + parse_tokens["output"] * _HAIKU_OUT
-    sonnet_cost = gen_tokens["input"] * _SONNET_IN + gen_tokens["output"] * _SONNET_OUT
+    sonnet_cost = (
+        gen_tokens["input"] * _SONNET_IN
+        + gen_tokens["output"] * _SONNET_OUT
+        + gen_tokens.get("cache_creation", 0) * _SONNET_CACHE_WRITE
+        + gen_tokens.get("cache_read", 0) * _SONNET_CACHE_READ
+    )
     total_cost = haiku_cost + sonnet_cost
 
     user = db.query(User).filter(User.id == current_user.id).first()
@@ -244,4 +338,6 @@ async def generate(
         bot_notes=bot_notes,
         needs_verification=needs_verification,
         faq_sources=faq_sources,
+        canned_sources=canned_sources,
+        cache_hit=gen_tokens.get("cache_read", 0) > 0,
     )

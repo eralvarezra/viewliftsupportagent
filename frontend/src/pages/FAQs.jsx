@@ -12,6 +12,12 @@ export default function FAQs() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [uploadingFile, setUploadingFile] = useState(null)
+  const [cannedResponses, setCannedResponses] = useState([])
+  const [cannedSyncing, setCannedSyncing] = useState(false)
+  const [cannedSyncCount, setCannedSyncCount] = useState(0)
+  const [cannedError, setCannedError] = useState(null)
+  const [expandedCannedId, setExpandedCannedId] = useState(null)
+  const [collapsedGroups, setCollapsedGroups] = useState({})
   const [deletingId, setDeletingId] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [selectedUploadPlatformId, setSelectedUploadPlatformId] = useState(null)
@@ -34,6 +40,56 @@ export default function FAQs() {
   useEffect(() => {
     if (selectedUploadPlatformId) fetchFaqs()
   }, [selectedUploadPlatformId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchCannedResponses()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchCannedResponses = async () => {
+    try {
+      const res = await client.get('/canned-responses/')
+      setCannedResponses(res.data)
+    } catch (err) {
+      setCannedError('Failed to load canned responses')
+    }
+  }
+
+  const handleCannedSync = async () => {
+    setCannedSyncing(true)
+    setCannedError(null)
+    try {
+      await client.post('/canned-responses/sync')
+      // Poll status until done
+      const poll = setInterval(async () => {
+        try {
+          const status = await client.get('/canned-responses/sync/status')
+          const { running, done, synced, error } = status.data
+          setCannedSyncCount(synced || 0)
+          if (done || !running) {
+            clearInterval(poll)
+            setCannedSyncing(false)
+            setCannedSyncCount(0)
+            if (error) {
+              toast.error(`Sync error: ${error}`)
+              setCannedError(error)
+            } else {
+              await fetchCannedResponses()
+              toast.success(`Sync complete: ${synced} canned responses updated`)
+            }
+          }
+        } catch {
+          clearInterval(poll)
+          setCannedSyncing(false)
+          toast.error('Error checking sync status')
+        }
+      }, 3000)
+    } catch (err) {
+      setCannedSyncing(false)
+      const msg = err.response?.data?.detail || 'Failed to start sync'
+      toast.error(msg)
+      setCannedError(msg)
+    }
+  }
 
   const fetchFaqs = async () => {
     if (!selectedUploadPlatformId) return
@@ -545,6 +601,137 @@ export default function FAQs() {
           </div>
         </div>
       )}
+
+      {/* Canned Responses Section */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Canned Responses</h2>
+            <p className="text-gray-600 mt-1">
+              Synced from Freshdesk — B2C General applies to all platforms, others are platform-specific
+            </p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={handleCannedSync}
+              disabled={cannedSyncing}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              {cannedSyncing ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Syncing{cannedSyncCount > 0 ? ` (${cannedSyncCount})` : '...'}
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Sync from Freshdesk
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {cannedError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">{cannedError}</div>
+        )}
+
+        {cannedResponses.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md px-6 py-10 text-center text-gray-400 text-sm">
+            No canned responses loaded. Click &quot;Sync from Freshdesk&quot; to import them.
+          </div>
+        ) : (() => {
+          // Group by platform: null → "B2C General", else platform_name
+          const groups = {}
+          cannedResponses.forEach(r => {
+            const key = r.platform_name || 'B2C General'
+            if (!groups[key]) groups[key] = []
+            groups[key].push(r)
+          })
+          // Sort: B2C General first, then alphabetically
+          const sortedKeys = Object.keys(groups).sort((a, b) => {
+            if (a === 'B2C General') return -1
+            if (b === 'B2C General') return 1
+            return a.localeCompare(b)
+          })
+          return (
+            <div className="space-y-4">
+              {sortedKeys.map(groupName => {
+                const items = groups[groupName]
+                const isGlobal = groupName === 'B2C General'
+                const isGroupCollapsed = collapsedGroups[groupName]
+                return (
+                  <div key={groupName} className="bg-white rounded-lg shadow-md overflow-hidden">
+                    {/* Group header */}
+                    <button
+                      onClick={() => setCollapsedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }))}
+                      className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors text-left border-b border-gray-200"
+                    >
+                      <div className="flex items-center gap-3">
+                        <svg
+                          className={`h-4 w-4 text-gray-500 flex-shrink-0 transition-transform duration-200 ${isGroupCollapsed ? '-rotate-90' : ''}`}
+                          xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        <span className="font-semibold text-gray-800">{groupName}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isGlobal ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {isGlobal ? 'All platforms' : 'Platform-specific'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400">{items.length} responses</span>
+                    </button>
+
+                    {/* Group items */}
+                    {!isGroupCollapsed && (
+                      <div className="divide-y divide-gray-100">
+                        {items.map(r => {
+                          const isExpanded = expandedCannedId === r.id
+                          return (
+                            <div key={r.id}>
+                              <button
+                                onClick={() => setExpandedCannedId(isExpanded ? null : r.id)}
+                                className="w-full px-6 py-3 flex items-center gap-2 hover:bg-gray-50 text-left transition-colors"
+                              >
+                                <svg
+                                  className={`h-3.5 w-3.5 text-gray-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                                  xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                                <span className="text-sm text-gray-800">{r.title}</span>
+                              </button>
+                              {isExpanded && (
+                                <div className="px-8 pb-4 pt-2 bg-gray-50 border-t border-gray-100">
+                                  {r.content_html ? (
+                                    <div
+                                      className="text-sm text-gray-700 leading-relaxed canned-html"
+                                      dangerouslySetInnerHTML={{ __html: r.content_html }}
+                                    />
+                                  ) : (
+                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{r.content}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              <p className="text-xs text-gray-400 text-right">{cannedResponses.length} total canned responses</p>
+            </div>
+          )
+        })()}
+      </div>
+
     </Layout>
   )
 }

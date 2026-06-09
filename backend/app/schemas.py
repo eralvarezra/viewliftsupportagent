@@ -15,6 +15,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     username: str
+    is_superadmin: bool = False
 
 
 class UserCreate(BaseModel):
@@ -99,6 +100,11 @@ class FAQSource(BaseModel):
     similarity: float
 
 
+class CannedSource(BaseModel):
+    title: str
+    similarity: float
+
+
 class GenerateResponse(BaseModel):
     parsed: ParsedData
     response: Optional[str] = None
@@ -106,6 +112,8 @@ class GenerateResponse(BaseModel):
     bot_notes: Optional[str] = None
     needs_verification: bool = False
     faq_sources: List[FAQSource] = []
+    canned_sources: List[CannedSource] = []
+    cache_hit: bool = False
 
 
 # Platform schemas

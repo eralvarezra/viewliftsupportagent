@@ -134,6 +134,7 @@ def get_my_profile(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         "role": current_user.role,
         "freshdesk_api_key": current_user.freshdesk_api_key or "",
+        "is_superadmin": bool(getattr(current_user, "is_superadmin", False)),
     }
 
 @router.put("/me/freshdesk-key")
@@ -182,8 +183,8 @@ async def toggle_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if user.username == "admin":
-        raise HTTPException(status_code=400, detail="Cannot change the root admin role")
+    if getattr(user, "is_superadmin", False):
+        raise HTTPException(status_code=400, detail="Cannot change the superadmin role")
 
     user.role = "admin" if user.role != "admin" else "agent"
     db.commit()

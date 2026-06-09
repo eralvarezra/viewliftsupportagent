@@ -10,6 +10,7 @@ import Insights from './pages/Insights'
 import Tracker from './pages/Tracker'
 import Profile from './pages/Profile'
 import Reports from './pages/Reports'
+import OpenTickets from './pages/OpenTickets'
 import ProtectedRoute from './components/ProtectedRoute'
 import { PlatformProvider } from './context/PlatformContext'
 
@@ -87,6 +88,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Reports />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/open-tickets"
+          element={
+            <ProtectedRoute>
+              <OpenTickets />
             </ProtectedRoute>
           }
         />

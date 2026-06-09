@@ -165,8 +165,6 @@ class ClaudeClient:
             "- If the FAQ context references a different app name, ignore that name and use "
             + platform_name + " only" + cms_line + "\n\n"
         )
-        active_rules = platform_identity + rules
-
         ticket_type = parsed_data.get("ticket_type")
         prompt_template = GENERATE_TECHNICAL_PROMPT if ticket_type == "technical" else GENERATE_BILLING_PROMPT
         prompt = prompt_template.format(
@@ -177,23 +175,30 @@ class ClaudeClient:
         )
 
         notes = (agent_notes or "").strip()
-        if notes:
-            if override_rules:
-                active_rules = (
-                    "PRIORITY 0 — AGENT OVERRIDE (overrides ALL rules and FAQ below):\n"
-                    + notes
-                    + "\n\n---\n\n"
-                    + active_rules
-                )
-            else:
-                active_rules = (
-                    active_rules
-                    + "\n\n---\n\n"
-                    "MANDATORY AGENT INSTRUCTIONS — these are hard rules set by the support agent. "
-                    "They MUST be followed exactly and override the billing/technical prompt behavior where they conflict. "
-                    "Do NOT violate these under any circumstances:\n"
-                    + notes
-                )
+
+        # Split system into two blocks: large constant rules block (cached) + small variable block.
+        # Cache hits on rules save ~90% of those token costs on subsequent calls.
+        if notes and override_rules:
+            non_cached_text = (
+                "PRIORITY 0 — AGENT OVERRIDE (overrides ALL rules and FAQ below):\n"
+                + notes + "\n\n---\n\n" + platform_identity
+            )
+        elif notes:
+            non_cached_text = (
+                platform_identity
+                + "\n\n---\n\n"
+                "MANDATORY AGENT INSTRUCTIONS — these are hard rules set by the support agent. "
+                "They MUST be followed exactly and override the billing/technical prompt behavior where they conflict. "
+                "Do NOT violate these under any circumstances:\n"
+                + notes
+            )
+        else:
+            non_cached_text = platform_identity
+
+        system_blocks = [
+            {"type": "text", "text": rules, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": non_cached_text},
+        ]
 
         content: List[dict] = []
         if images:
@@ -214,11 +219,17 @@ class ClaudeClient:
             model=self.GENERATE_MODEL,
             max_tokens=2048,
             temperature=0.3,
-            system=active_rules,
+            system=system_blocks,
             messages=[{"role": "user", "content": content}],
         )
 
-        tokens = {"input": response.usage.input_tokens, "output": response.usage.output_tokens}
+        usage = response.usage
+        tokens = {
+            "input": usage.input_tokens,
+            "output": usage.output_tokens,
+            "cache_creation": getattr(usage, "cache_creation_input_tokens", 0) or 0,
+            "cache_read": getattr(usage, "cache_read_input_tokens", 0) or 0,
+        }
         return response.content[0].text, tokens
 
     def analyze_trends(self, summaries_with_ids: List[tuple]) -> TrendsResponse:
@@ -269,21 +280,29 @@ class ClaudeClient:
         """Analyze a list of Freshdesk ticket dicts from CSV and group by problem."""
         import json as _json
 
-        # Build compact ticket list for the prompt
+        # Build compact ticket list and a lookup of ticket_id -> platform for enforcement
         lines = []
+        ticket_platform_map: dict[int, str] = {}
+        ticket_tags_map: dict[int, list] = {}
         for t in tickets:
             tid = t.get("Ticket ID", t.get("ticket_id", "?"))
             subject = t.get("Subject", "")
             desc = t.get("Description", "")[:400]
-            tags = t.get("Tags", "")
+            tags_raw = t.get("Tags", "")
             product = t.get("Product", "")
             client = t.get("Client Name", t.get("Full name", ""))
             platform = t.get("Platform", "")
             status = t.get("Status", "")
             lines.append(
-                f"ID={tid} | Client={client} | Platform={platform} | Status={status} | "
-                f"Tags=[{tags}] | Product={product} | Subject={subject} | Desc={desc}"
+                f"ID={tid} | Platform={platform} | Client={client} | Status={status} | "
+                f"Tags=[{tags_raw}] | Product={product} | Subject={subject} | Desc={desc}"
             )
+            try:
+                tid_int = int(tid)
+                ticket_platform_map[tid_int] = platform
+                ticket_tags_map[tid_int] = [tg.strip() for tg in tags_raw.split(",") if tg.strip()]
+            except (ValueError, TypeError):
+                pass
 
         tickets_text = "\n".join(lines)
 
@@ -293,22 +312,24 @@ TICKET DATA (use ONLY what is explicitly stated here — do NOT invent any infor
 {tickets_text}
 
 INSTRUCTIONS:
-- Group tickets by BOTH client AND problem type — each group must contain tickets from EXACTLY ONE client only
-- If the same problem affects multiple clients, create a completely separate group for each client
-- NEVER mix tickets from different clients in the same group — this is mandatory
-- ONLY include groups with 3 or more tickets (high trend) — ignore smaller groups completely
+- Group tickets by BOTH Platform AND problem type — each group must contain tickets from EXACTLY ONE Platform value only
+- The Platform field (e.g. "SCHN+", "Altitude B2C", "LIV Golf") is the product/service — it is NOT the customer name
+- NEVER mix tickets with different Platform values in the same group — this is the most important rule
+- If the same problem affects multiple platforms, create a completely separate group for each platform
+- ONLY include groups with 3 or more tickets — ignore smaller groups completely
 - Spam tickets must be ignored entirely
 - For each group extract strictly from the data above:
   * title: use standardized category names — choose the closest match from: "Login / Account Access Issues", "Billing / Payment Issues", "Refund Requests", "Subscription Cancellation", "Video Playback / Buffering", "Content / Streaming Access", "App Crashes / Technical Issues", "General App Inquiries". Only create a custom title if none of these fit
   * description: 1-2 sentences describing the pattern
-  * ticket_ids: list of Ticket ID numbers (integers) for tickets in this group
+  * ticket_ids: list of Ticket ID numbers (integers) for tickets in this group — ALL must share the same Platform value
   * clients: list of unique client/contact names (from "Client=" field)
   * tags: combined unique tags from all tickets in this group (from "Tags=[...]" field, split by comma)
   * devices: device names ONLY if explicitly mentioned in Subject or Desc (e.g. iOS, Android, Roku, FireTV, Web, Samsung TV) — empty list if none mentioned
-  * platforms: unique platform names from the "Platform=" field for tickets in this group — empty list [] if none, never use "None" as a value
+  * platforms: list containing the single Platform value shared by all tickets in this group — empty list [] if Platform is blank for all tickets, never use "None" as a value
   * trend: volume indicator — "high" if 3 or more tickets, "medium" if exactly 2, "low" if 1
 
 STRICT RULES:
+- Every ticket_id in a group must have the same Platform value — verify before outputting
 - Only include devices, tags, clients, platforms that appear in the raw data above
 - Do not add tags, devices, or names that are not present
 - ticket_ids must be integers
@@ -325,7 +346,7 @@ Return ONLY valid JSON, no markdown, no explanation:
       "clients": ["Name 1", "Name 2"],
       "tags": ["tag1", "tag2"],
       "devices": ["iOS", "Android"],
-      "platforms": ["Fox One", "SCHN+"],
+      "platforms": ["SCHN+"],
       "trend": "high"
     }}
   ]
@@ -341,10 +362,44 @@ Return ONLY valid JSON, no markdown, no explanation:
         raw = response.content[0].text.strip()
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.DOTALL).strip()
 
+        tokens = {"input": response.usage.input_tokens, "output": response.usage.output_tokens}
         try:
             data = _json.loads(raw)
             if "groups" not in data:
                 raise ValueError("Missing 'groups' key")
-            return data
+
+            # Enforce platform isolation: split any group that contains tickets from multiple platforms
+            clean_groups = []
+            for group in data["groups"]:
+                tids = [tid for tid in group.get("ticket_ids", []) if isinstance(tid, int)]
+                if not tids:
+                    continue
+                # Bucket by platform
+                by_platform: dict[str, list] = {}
+                for tid in tids:
+                    plat = ticket_platform_map.get(tid, "")
+                    by_platform.setdefault(plat, []).append(tid)
+                if len(by_platform) <= 1:
+                    # Populate platforms from ticket map even if no split needed
+                    fixed = dict(group)
+                    if not fixed.get("platforms"):
+                        plat = list(by_platform.keys())[0] if by_platform else ""
+                        fixed["platforms"] = [plat] if plat else []
+                    clean_groups.append(fixed)
+                else:
+                    # Split into one group per platform
+                    for plat, plat_tids in by_platform.items():
+                        if len(plat_tids) < 3:
+                            continue  # keep min-3 rule after split
+                        split_tags = list({tg for tid in plat_tids for tg in ticket_tags_map.get(tid, [])})
+                        clean_groups.append({
+                            **group,
+                            "ticket_ids": plat_tids,
+                            "platforms": [plat] if plat else [],
+                            "tags": split_tags,
+                            "trend": "high" if len(plat_tids) >= 3 else "medium" if len(plat_tids) == 2 else "low",
+                        })
+            data["groups"] = clean_groups
+            return data, tokens
         except (json.JSONDecodeError, ValueError) as exc:
             raise RuntimeError(f"analyze_daily_update: failed to parse Claude response: {exc}") from exc

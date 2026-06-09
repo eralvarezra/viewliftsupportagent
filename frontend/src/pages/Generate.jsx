@@ -32,6 +32,8 @@ export default function Generate() {
   const rlTimerRef = useRef(null)
   const [needsVerification, setNeedsVerification] = useState(false)
   const [faqSources, setFaqSources] = useState([])
+  const [cannedSources, setCannedSources] = useState([])
+  const [cacheHit, setCacheHit] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -82,6 +84,7 @@ export default function Generate() {
     setBotNotes(null)
     setNeedsVerification(false)
     setFaqSources([])
+    setCannedSources([])
     setScreenshots([])
   }, [activePlatform?.id])
 
@@ -115,7 +118,7 @@ export default function Generate() {
     setBotNotes(null)
     setNeedsVerification(false)
     setFaqSources([])
-    setScreenshots([])
+    setCannedSources([])
 
     try {
       const response = await client.post('/generate', {
@@ -131,6 +134,7 @@ export default function Generate() {
       setBotNotes(response.data.bot_notes || null)
       setNeedsVerification(response.data.needs_verification || false)
       setFaqSources(response.data.faq_sources || [])
+      setCannedSources(response.data.canned_sources || [])
 
       if (response.data.needs_verification) {
         toast('CMS verification required — attach a screenshot to continue', { icon: '⚠️' })
@@ -167,6 +171,7 @@ export default function Generate() {
       setBotNotes(response.data.bot_notes || null)
       setNeedsVerification(response.data.needs_verification || false)
       setFaqSources(response.data.faq_sources || [])
+      setCannedSources(response.data.canned_sources || [])
 
       if (response.data.needs_verification) {
         toast('CMS verification required — attach a screenshot to continue', { icon: '⚠️' })
@@ -272,6 +277,7 @@ export default function Generate() {
     setBotNotes(null)
     setNeedsVerification(false)
     setFaqSources([])
+    setCannedSources([])
     setScreenshots([])
     toast.success('Cleared successfully')
   }
@@ -495,38 +501,52 @@ end_of_access: 2026-05-18`}
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Parsed Information</h3>
 
             {parsedInfo ? (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Customer Name</label>
-                    <p className="mt-1 text-gray-900 dark:text-gray-100">{parsedInfo.customer_name || 'Not detected'}</p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                    <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Customer Name</label>
+                    <p className="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-medium">{parsedInfo.customer_name || 'Not detected'}</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
-                    <p className="mt-1 text-gray-900 dark:text-gray-100">{parsedInfo.customer_email || 'Not detected'}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Device</label>
-                    <p className="mt-1 text-gray-900 dark:text-gray-100">{parsedInfo.device || 'Not detected'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Account Number</label>
-                    <p className="mt-1 text-gray-900 dark:text-gray-100">{parsedInfo.account_number || 'Not detected'}</p>
+                  <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                    <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Email</label>
+                    <p className="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-medium truncate">{parsedInfo.customer_email || 'Not detected'}</p>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Problem Summary</label>
-                  <p className="mt-1 text-gray-900 dark:text-gray-100">{parsedInfo.problem_summary || 'Not detected'}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                    <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Device</label>
+                    <p className="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-medium">{parsedInfo.device || 'Not detected'}</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                    <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Account Number</label>
+                    <p className="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-medium">{parsedInfo.account_number || 'Not detected'}</p>
+                 </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Context</label>
-                  <p className="mt-1 text-gray-900 text-sm">{parsedInfo.context || 'Not detected'}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                    <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Ticket Type</label>
+                    <p className="mt-0.5 text-sm font-medium capitalize">
+                      {parsedInfo.ticket_type === 'billing' && <span className="text-amber-600 dark:text-amber-400">{parsedInfo.ticket_type}</span>}
+                      {parsedInfo.ticket_type === 'technical' && <span className="text-blue-600 dark:text-blue-400">{parsedInfo.ticket_type}</span>}
+                      {!parsedInfo.ticket_type && <span className="text-gray-400 dark:text-gray-500 italic">Not detected</span>}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                    <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Payment Handler</label>
+                    <p className="mt-0.5 text-sm text-gray-900 dark:text-gray-100 font-medium">{parsedInfo.payment_handler || 'Not detected'}</p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                  <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Problem Summary</label>
+                  <p className="mt-0.5 text-sm text-gray-900 dark:text-gray-100">{parsedInfo.problem_summary || 'Not detected'}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/60 rounded-md px-3 py-2">
+                  <label className="block text-xs font-semibold text-gray-400 dark:text-gray-400 uppercase tracking-wide">Context</label>
+                  <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">{parsedInfo.context || 'Not detected'}</p>
                 </div>
               </div>
             ) : (
-              <div className="text-gray-400 text-center py-8">
+              <div className="text-gray-400 dark:text-gray-500 text-center py-8">
                 <p>Parsed information will appear here</p>
               </div>
             )}
@@ -562,9 +582,22 @@ end_of_access: 2026-05-18`}
           {(!needsVerification || screenshots.length > 0) && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  {nextSteps && generatedResponse ? '✉️ Customer Response' : 'Generated Response'}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {nextSteps && generatedResponse ? '✉️ Customer Response' : 'Generated Response'}
+                  </h3>
+                  {generatedResponse && (
+                    cacheHit ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        ⚡ Cached
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                        Fresh
+                      </span>
+                    )
+                  )}
+                </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={handleCopy}
@@ -631,6 +664,24 @@ end_of_access: 2026-05-18`}
                 </span>
               </div>
               <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans leading-relaxed">{botNotes}</pre>
+            </div>
+          )}
+
+          {/* Canned Responses Used */}
+          {cannedSources.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-indigo-500"></span>
+                Canned Response Used
+              </h3>
+              <div className="space-y-2">
+                {cannedSources.map((source, index) => (
+                  <div key={index} className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 rounded-lg px-4 py-2.5">
+                    <span className="text-sm font-medium text-indigo-800 dark:text-indigo-300">{source.title}</span>
+                    <span className="text-xs text-indigo-500 dark:text-indigo-400 ml-3 flex-shrink-0">{(source.similarity * 100).toFixed(1)}% match</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -18,7 +18,8 @@ function getUserFromStorage() {
     } catch {}
   }
 
-  return { role, username }
+  const is_superadmin = localStorage.getItem('isSuperadmin') === 'true'
+  return { role, username, is_superadmin }
 }
 
 export function useAuth() {
@@ -29,12 +30,14 @@ export function useAuth() {
       const response = await client.post('/auth/login', { username, password })
       const { access_token, role, username: returnedUsername } = response.data
       const resolvedUsername = returnedUsername || username
+      const isSuperadmin = response.data.is_superadmin || false
 
       localStorage.setItem('token', access_token)
       localStorage.setItem('userRole', role)
       localStorage.setItem('username', resolvedUsername)
+      localStorage.setItem('isSuperadmin', isSuperadmin ? 'true' : 'false')
 
-      setUser({ role, username: resolvedUsername })
+      setUser({ role, username: resolvedUsername, is_superadmin: isSuperadmin })
       return { success: true }
     } catch (error) {
       const message = error.response?.data?.detail || 'Login failed. Please try again.'
@@ -46,6 +49,7 @@ export function useAuth() {
     localStorage.removeItem('token')
     localStorage.removeItem('userRole')
     localStorage.removeItem('username')
+    localStorage.removeItem('isSuperadmin')
     setUser(null)
   }, [])
 

@@ -75,7 +75,8 @@ async def login(request: LoginRequest):
     return TokenResponse(
         access_token=access_token,
         role=user.role,
-        username=user.username
+        username=user.username,
+        is_superadmin=bool(getattr(user, 'is_superadmin', False))
     )
 
 

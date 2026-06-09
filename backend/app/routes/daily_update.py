@@ -1,4 +1,5 @@
 import csv
+import math
 import io
 import re
 import requests
@@ -29,21 +30,21 @@ FRESHDESK_AUTH = (settings.FRESHDESK_API_KEY, "X")
 def _fetch_ticket(ticket_id: int, auth=None) -> dict | None:
     import time
     _auth = auth or FRESHDESK_AUTH
-    for attempt in range(3):
+    for attempt in range(4):
         try:
             r = requests.get(
                 f"{FRESHDESK_BASE}/tickets/{ticket_id}",
                 auth=_auth,
-                timeout=10,
+                timeout=8,
             )
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 429:
-                time.sleep(2 ** attempt)
+                time.sleep(2 ** attempt)  # 1, 2, 4, 8s
                 continue
+            return None
         except Exception:
-            pass
-        break
+            return None
     return None
 
 
@@ -63,7 +64,7 @@ def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
 
     # Fetch all ticket details in parallel (max 10 workers)
     ticket_data = {}
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_fetch_ticket, tid, _auth): tid for tid in ticket_ids}
         for future in as_completed(futures):
             tid = futures[future]
@@ -92,7 +93,7 @@ def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
 
     # Fetch tracker details + conversations in parallel
     tracker_raw = {}
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(_fetch_ticket, tr_id, _auth): tr_id for tr_id in tracker_ids_needed}
         for future in as_completed(futures):
             tr_id = futures[future]
@@ -101,7 +102,7 @@ def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
                 tracker_raw[tr_id] = data
 
     conv_futures = {}
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         conv_futures = {executor.submit(_fetch_tracker_conversations, tr_id, _auth): tr_id for tr_id in tracker_raw}
         tracker_convs = {}
         for future in as_completed(conv_futures):
@@ -133,13 +134,18 @@ def _get_tracker_info(ticket_ids: list[int], auth=None) -> dict:
         }
 
     # Build result mapping
+    ticket_client_map = {}
     for tid, data in ticket_data.items():
+        # Extract authoritative client/platform from Freshdesk custom fields
+        client_name = (data.get("custom_fields") or {}).get("cf_b2b_client_name") or ""
+        if client_name:
+            ticket_client_map[tid] = client_name
         if data.get("association_type") == 4:
             assoc = data.get("associated_tickets_list", [])
             if assoc and assoc[0] in tracker_cache:
                 result[tid] = {"tracker_id": assoc[0], **tracker_cache[assoc[0]]}
 
-    return result, tracker_cache
+    return result, tracker_cache, ticket_client_map
 
 
 @router.post("/analyze")
@@ -178,7 +184,37 @@ async def analyze_daily_update(
 
     # 1. Fetch tracker info from Freshdesk
     user_fd_auth = (current_user.freshdesk_api_key, "X") if current_user.freshdesk_api_key else FRESHDESK_AUTH
-    tracker_by_ticket, tracker_details = _get_tracker_info(csv_ticket_ids, auth=user_fd_auth)
+
+    # Pre-flight: check Freshdesk rate limit before starting expensive batch fetch
+    try:
+        _preflight = requests.get(
+            f"{FRESHDESK_BASE}/tickets?per_page=1",
+            auth=user_fd_auth,
+            timeout=8,
+        )
+        if _preflight.status_code == 429:
+            _retry_after = _preflight.headers.get("Retry-After", "")
+            try:
+                _wait_s = int(_retry_after)
+                _minutes = math.ceil(_wait_s / 60)
+                _detail = f"Freshdesk API rate limit reached. Try again in {_minutes} minute{'s' if _minutes != 1 else ''}."
+            except (ValueError, TypeError):
+                _detail = "Freshdesk API rate limit reached. Try again later."
+            raise HTTPException(status_code=429, detail=_detail)
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # network error on preflight — proceed anyway, batch will handle it
+
+    tracker_by_ticket, tracker_details, ticket_client_map = _get_tracker_info(csv_ticket_ids, auth=user_fd_auth)
+
+    # Override Platform field in CSV rows with authoritative cf_b2b_client_name from Freshdesk
+    for t in tickets:
+        raw_id = str(t.get("Ticket ID", "")).strip()
+        if raw_id.isdigit():
+            tid_int = int(raw_id)
+            if tid_int in ticket_client_map:
+                t["Platform"] = ticket_client_map[tid_int]
 
     # 2. Build tracker groups (tracker_id -> list of ticket_ids from CSV)
     tracker_groups = {}
@@ -216,7 +252,7 @@ async def analyze_daily_update(
     result["total_with_freshdesk_tracker"] = total_with_tracker
     result["filename"] = file.filename or "upload.csv"
 
-    # 6. Save to DB
+    # 6. Save to DB and update user monthly cost
     du_cost = du_tokens["input"] * _SONNET_IN + du_tokens["output"] * _SONNET_OUT
     report = DailyUpdateReport(
         user_id=current_user.id,
@@ -252,6 +288,7 @@ async def get_daily_update_history(
             "total_tickets": r.total_tickets,
             "total_tracked": r.total_tracked,
             "group_count": len(r.result_json.get("groups", [])) if r.result_json else 0,
+            "cost": round(r.cost or 0.0, 4),
             "created_at": r.created_at.isoformat(),
         }
         for r in reports

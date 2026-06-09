@@ -146,7 +146,9 @@ async def upload_faq(
 
     # Detect document type from filename
     filename_lower = file.filename.lower()
-    doc_type = "zipcode" if any(k in filename_lower for k in ("zip", "zipcode", "zip_code", "cobertura")) else "faq"
+    location_kw = ("location_rule", "travel_rule", "geo_rule", "location-rule")
+    zip_kw = ("zip", "zipcode", "zip_code", "cobertura")
+    doc_type = "location_rules" if any(k in filename_lower for k in location_kw) else ("zipcode" if any(k in filename_lower for k in zip_kw) else "faq")
 
     # Create FAQ document record
     faq_document = FAQDocument(

@@ -5,6 +5,131 @@ import toast from 'react-hot-toast'
 
 const DAYS_PER_PAGE = 7
 
+const TAMPERMONKEY_SCRIPT = `// ==UserScript==
+// @name         SCHN+ Case Tracker
+// @namespace    http://tampermonkey.net/
+// @version      1.4
+// @description  Auto-tracks a case when status changes to Waiting on End User in Freshdesk
+// @author       SCHN+
+// @match        https://viewlift.freshdesk.com/a/tickets/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @connect      135.181.37.72
+// ==/UserScript==
+
+(function () {
+    'use strict';
+
+    const TRACKER_URL = 'http://135.181.37.72:3001/api/ticket-tracker/';
+    const WAITING_STATUS_ID = 12;
+    const COOLDOWN_MS = 60000;
+
+    // Prevents double-firing when both click listener and network interceptor trigger for the same action
+    const recentlyTracked = new Map();
+
+    GM_registerMenuCommand('⚙️ Set API Key', () => {
+        const key = prompt('Paste your SCHN+ API Key (from Ticket Tracker page):');
+        if (key && key.trim()) {
+            GM_setValue('api_key', key.trim());
+            alert('✅ API Key saved!');
+        }
+    });
+
+    function getApiKey() { return GM_getValue('api_key', null); }
+
+    function showToast(message, color = '#4f46e5') {
+        const existing = document.getElementById('schn-tracker-toast');
+        if (existing) existing.remove();
+        const toast = document.createElement('div');
+        toast.id = 'schn-tracker-toast';
+        toast.style.cssText = \`position:fixed;bottom:24px;right:24px;z-index:2147483647;background:\${color};color:white;padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,0.25);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;opacity:1;transition:opacity 0.4s;\`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 3500);
+    }
+
+    function trackTicket(ticketId) {
+        const now = Date.now();
+        const lastTracked = recentlyTracked.get(ticketId);
+        if (lastTracked && (now - lastTracked) < COOLDOWN_MS) {
+            console.log(\`[SCHN+] Skipped duplicate track for #\${ticketId} (cooldown active)\`);
+            return;
+        }
+        recentlyTracked.set(ticketId, now);
+
+        const apiKey = getApiKey();
+        if (!apiKey) { showToast('⚠️ No API Key set. Click Tampermonkey → Set API Key.', '#dc2626'); return; }
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: TRACKER_URL,
+            headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${apiKey}\` },
+            data: JSON.stringify({ ticket_url: \`https://viewlift.freshdesk.com/a/tickets/\${ticketId}\` }),
+            onload: (r) => r.status === 200 || r.status === 201
+                ? (console.log(\`[SCHN+] ✓ Tracked #\${ticketId}\`), showToast(\`✓ Ticket #\${ticketId} tracked\`, '#16a34a'))
+                : (console.warn(\`[SCHN+] Error \${r.status}\`, r.responseText), showToast(\`⚠️ Tracker error (\${r.status})\`, '#d97706')),
+            onerror: () => showToast('❌ Could not reach SCHN+ tracker', '#dc2626'),
+        });
+    }
+
+    function checkBody(body, url, method) {
+        if (!/tickets/i.test(url)) return;
+        const ticketMatch = url.match(/\\/tickets\\/(\\d+)/);
+        if (!ticketMatch) return;
+        console.log(\`[SCHN+] \${method} \${url}\`, typeof body === 'string' ? body.slice(0, 200) : body);
+        if (/execute_scenario/i.test(url)) { trackTicket(ticketMatch[1]); return; }
+        try {
+            const data = typeof body === 'string' ? JSON.parse(body) : (body || {});
+            const status = data.status ?? data.ticket?.status ?? data.properties?.status;
+            if (Number(status) === WAITING_STATUS_ID) trackTicket(ticketMatch[1]);
+        } catch (_) {}
+    }
+
+    const originalFetch = window.fetch;
+    window.fetch = async function (...args) {
+        const [input, options] = args;
+        const url = typeof input === 'string' ? input : (input?.url || '');
+        const method = (options?.method || 'GET').toUpperCase();
+        if (['PUT', 'PATCH', 'POST'].includes(method)) {
+            let body = options?.body;
+            if (body instanceof ReadableStream) {
+                const [a, b] = body.tee();
+                options.body = b;
+                body = await new Response(a).text();
+            }
+            checkBody(body, url, method);
+        }
+        return originalFetch.apply(this, args);
+    };
+
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+        this._schn_method = method?.toUpperCase();
+        this._schn_url = typeof url === 'string' ? url : String(url);
+        return originalOpen.apply(this, [method, url, ...rest]);
+    };
+    XMLHttpRequest.prototype.send = function (body) {
+        if (['PUT', 'PATCH', 'POST'].includes(this._schn_method)) checkBody(body, this._schn_url, this._schn_method);
+        return originalSend.apply(this, arguments);
+    };
+
+    function watchExecuteButton() {
+        document.addEventListener('click', function(e) {
+            const el = e.target.closest('button, [role="button"], li, a');
+            if (!el) return;
+            const text = el.textContent.trim();
+            if (!/^execute$/i.test(text)) return;
+            const ticketMatch = window.location.href.match(/\\/tickets\\/(\\d+)/);
+            if (!ticketMatch) return;
+            setTimeout(() => trackTicket(ticketMatch[1]), 500);
+        }, true);
+    }
+    watchExecuteButton();
+    console.log('[SCHN+ Tracker] v1.4 active — watching PUT/PATCH/POST on ticket URLs + Execute Scenario.');
+})();`
+
 function groupByDay(logs) {
   const groups = {}
   for (const log of logs) {
@@ -27,6 +152,7 @@ export default function Tracker() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [scriptCopied, setScriptCopied] = useState(false)
   const [expanded, setExpanded] = useState({})
   const [page, setPage] = useState(1)
 
@@ -62,11 +188,43 @@ export default function Tracker() {
     }
   }
 
+  const fallbackCopy = (text, onSuccess) => {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;opacity:0;border:0;padding:0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    if (ok && onSuccess) onSuccess()
+  }
+
+  const copyToClipboard = (text, onSuccess) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopy(text, onSuccess))
+    } else {
+      fallbackCopy(text, onSuccess)
+    }
+  }
+
   const copyKey = () => {
     if (!apiKey) return
-    navigator.clipboard.writeText(apiKey)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    copyToClipboard(apiKey, () => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+
+  const copyScript = () => {
+    copyToClipboard(TAMPERMONKEY_SCRIPT, () => { setScriptCopied(true); setTimeout(() => setScriptCopied(false), 2000) })
+  }
+
+  const downloadScript = () => {
+    const blob = new Blob([TAMPERMONKEY_SCRIPT], { type: 'application/javascript' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'schn-case-tracker.user.js'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const deleteLog = async (id) => {
@@ -125,6 +283,55 @@ export default function Tracker() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
             Paste this key into your Tampermonkey script to activate the tracker.
           </p>
+        </div>
+
+        {/* Tampermonkey Script section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                Tampermonkey Script
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                v1.4 — Install this script in Tampermonkey to enable automatic ticket tracking.
+              </p>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
+              Latest
+            </span>
+          </div>
+
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700 p-3 mb-3 max-h-48 overflow-y-auto">
+            <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-all leading-relaxed">
+              {TAMPERMONKEY_SCRIPT}
+            </pre>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={copyScript}
+              className="flex-1 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              {scriptCopied ? 'Copied!' : 'Copy Script'}
+            </button>
+            <button
+              onClick={downloadScript}
+              className="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              Download .js
+            </button>
+          </div>
+
+          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-100 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-300 font-medium mb-1">How to install:</p>
+            <ol className="text-xs text-blue-600 dark:text-blue-400 space-y-0.5 list-decimal list-inside">
+              <li>Install the Tampermonkey extension in your browser</li>
+              <li>Click "Download .js" or copy the script above</li>
+              <li>Open Tampermonkey → Dashboard → New script, paste and save</li>
+              <li>Go to any Freshdesk ticket, click Tampermonkey icon → "Set API Key"</li>
+              <li>Paste your API key from the section above</li>
+            </ol>
+          </div>
         </div>
 
         {/* Logs */}

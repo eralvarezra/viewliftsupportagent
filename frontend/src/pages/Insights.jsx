@@ -470,6 +470,9 @@ export default function DailyUpdate() {
   const [filterTrend, setFilterTrend] = useState(null) // null | 'high' | 'medium' | 'low'
   const [filterTracker, setFilterTracker] = useState(false)
   const [slackCopied, setSlackCopied] = useState(false)
+  const [apiStatus, setApiStatus] = useState(null)   // null | {status, remaining, total, retry_after_seconds, message}
+  const [apiChecking, setApiChecking] = useState(false)
+  const [rateLimitError, setRateLimitError] = useState(null)  // string | null
 
   useEffect(() => {
     client.get('/daily-update/history')
@@ -504,6 +507,19 @@ export default function DailyUpdate() {
     }
   }
 
+  const checkApi = async () => {
+    setApiChecking(true)
+    setApiStatus(null)
+    try {
+      const r = await client.get('/freshdesk/status')
+      setApiStatus(r.data)
+    } catch (err) {
+      setApiStatus({ status: 'error', message: err.response?.data?.detail || 'Could not reach Freshdesk API' })
+    } finally {
+      setApiChecking(false)
+    }
+  }
+
   const processFile = useCallback(async (file) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
       toast.error('File must be a CSV')
@@ -512,6 +528,7 @@ export default function DailyUpdate() {
     setFileName(file.name)
     setLoading(true)
     setResult(null)
+    setRateLimitError(null)
     try {
       const form = new FormData()
       form.append('file', file)
@@ -526,7 +543,11 @@ export default function DailyUpdate() {
       toast.success('Analysis complete')
       client.get('/daily-update/history').then(r => setHistory(r.data)).catch(() => {})
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to analyze CSV')
+      if (err.response?.status === 429) {
+        setRateLimitError(err.response.data?.detail || 'Freshdesk API rate limit reached. Try again later.')
+      } else {
+        toast.error(err.response?.data?.detail || 'Failed to analyze CSV')
+      }
     } finally {
       setLoading(false)
     }
@@ -548,11 +569,11 @@ export default function DailyUpdate() {
     const byClient = (groups) => {
       const map = {}
       groups.forEach(g => {
-        const clients = (g.clients || []).filter(cl => cl && cl !== 'None' && cl.trim() !== '')
-        const effectiveClients = clients.length ? clients : ['Other']
-        effectiveClients.forEach(cl => {
-          if (!map[cl]) map[cl] = []
-          map[cl].push(g)
+        const platforms = (g.platforms || []).filter(cl => cl && cl !== 'None' && cl.trim() !== '')
+        const effectivePlatforms = platforms.length ? platforms : ['Other']
+        effectivePlatforms.forEach(p => {
+          if (!map[p]) map[p] = []
+          map[p].push(g)
         })
       })
       return map
@@ -574,6 +595,7 @@ export default function DailyUpdate() {
       const bi = KNOWN_CLIENTS.findIndex(k => b.toLowerCase().includes(k.split(' ')[0].toLowerCase()))
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
     }).forEach(([cl, groups]) => {
+      if (cl === 'Other') return
       msg += '\n*' + cl + '*\n'
       if (groups.length === 0) {
         msg += '  _No new trends identified_\n'
@@ -594,6 +616,7 @@ export default function DailyUpdate() {
       const grouped = byClient(trackerGroups)
       Object.entries(grouped).forEach(([platform, groups]) => {
         msg += '\n*' + platform + '*\n'
+        if (platform === 'Other') return
         groups.forEach(g => {
           const trackerInfo = g.tracker_ids.map(tid => {
             const td = result.tracker_details?.[tid]
@@ -605,22 +628,41 @@ export default function DailyUpdate() {
       })
     }
 
-    if (navigator.clipboard) {
+    const toHtml = (text) => {
+      return '<div style="font-family:sans-serif;font-size:14px;line-height:1.5">'
+        + text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\*((?:[^*])+)\*/g, '<b>$1</b>')
+            .replace(/_((?:[^_])+)_/g, '<i>$1</i>')
+            .replace(/\n/g, '<br>')
+        + '</div>'
+    }
+    const htmlMsg = toHtml(msg)
+    // Use DOM selection copy — most reliable cross-browser rich text method
+    const richEl = document.createElement('div')
+    richEl.innerHTML = htmlMsg
+    richEl.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0.01'
+    document.body.appendChild(richEl)
+    try {
+      const range = document.createRange()
+      range.selectNodeContents(richEl)
+      const sel = window.getSelection()
+      sel.removeAllRanges()
+      sel.addRange(range)
+      document.execCommand('copy')
+      sel.removeAllRanges()
+      setSlackCopied(true)
+      setTimeout(() => setSlackCopied(false), 2000)
+    } catch {
+      // Fallback to plain text
       navigator.clipboard.writeText(msg).then(() => {
         setSlackCopied(true)
         setTimeout(() => setSlackCopied(false), 2000)
       }).catch(() => toast.error('Could not copy'))
-    } else {
-      const el = document.createElement('textarea')
-      el.value = msg
-      el.style.position = 'fixed'
-      el.style.opacity = '0'
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-      setSlackCopied(true)
-      setTimeout(() => setSlackCopied(false), 2000)
+    } finally {
+      document.body.removeChild(richEl)
     }
   }
 
@@ -688,6 +730,7 @@ export default function DailyUpdate() {
                     <div className="flex-shrink-0 text-right mr-2">
                       <p className="text-xs font-medium text-gray-600 dark:text-gray-400">{r.total_tickets} tickets</p>
                       <p className="text-xs text-gray-400">{r.group_count} groups</p>
+                      {r.cost > 0 && <p className="text-xs text-indigo-400 dark:text-indigo-300">{(r.cost).toFixed(3)}</p>}
                     </div>
                     <button
                       onClick={(e) => deleteReport(r.id, e)}
@@ -705,6 +748,59 @@ export default function DailyUpdate() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Freshdesk API Status */}
+        <div className="flex items-center gap-3 mb-3">
+          <button
+            onClick={checkApi}
+            disabled={apiChecking}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            {apiChecking ? (
+              <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            )}
+            {apiChecking ? 'Checking...' : 'Test Freshdesk API'}
+          </button>
+          {apiStatus && (
+            <span className={`text-sm font-medium flex items-center gap-1.5 ${apiStatus.status === 'ok' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {apiStatus.status === 'ok' ? (
+                <>
+                  <span>✓ API ready</span>
+                  {apiStatus.remaining != null && (
+                    <span className="text-xs font-normal text-gray-400">({apiStatus.remaining.toLocaleString()} / {(apiStatus.total || 5000).toLocaleString()} calls remaining)</span>
+                  )}
+                </>
+              ) : (
+                <span>⚠ {apiStatus.message}</span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {rateLimitError && (
+          <div className="mb-4 flex items-start gap-3 p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
+            <svg className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">Freshdesk API Rate Limit</p>
+              <p className="text-sm text-orange-600 dark:text-orange-300 mt-0.5">{rateLimitError}</p>
+              <button
+                onClick={checkApi}
+                className="mt-2 text-xs text-orange-700 dark:text-orange-400 underline hover:no-underline"
+              >
+                Check current status
+              </button>
+            </div>
           </div>
         )}
 
@@ -834,11 +930,11 @@ export default function DailyUpdate() {
               // Group by client
               const clientMap = {}
               filtered.forEach(g => {
-                const clients = (g.clients || []).filter(cl => cl && cl !== 'None' && cl.trim() !== '')
-                const effectiveClients = clients.length ? clients : ['Other']
-                effectiveClients.forEach(cl => {
-                  if (!clientMap[cl]) clientMap[cl] = []
-                  clientMap[cl].push(g)
+                const platforms = (g.platforms || []).filter(cl => cl && cl !== 'None' && cl.trim() !== '')
+                const effectivePlatforms = platforms.length ? platforms : ['Other']
+                effectivePlatforms.forEach(p => {
+                  if (!clientMap[p]) clientMap[p] = []
+                  clientMap[p].push(g)
                 })
               })
               // Add known clients with no groups as empty entries

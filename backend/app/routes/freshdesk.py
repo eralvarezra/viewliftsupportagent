@@ -170,3 +170,49 @@ async def get_tracker_details(
         "all_linked_ids": t.get("associated_tickets_list", []),
         "latest_note": latest_note,
     }
+
+
+@router.get("/status")
+async def get_freshdesk_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Quick check: is the Freshdesk API available and how many calls remain?"""
+    auth = (current_user.freshdesk_api_key, "X") if current_user.freshdesk_api_key else FRESHDESK_AUTH
+    try:
+        r = requests.get(
+            f"{FRESHDESK_BASE}/tickets?per_page=1",
+            auth=auth,
+            timeout=8,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail="Could not reach Freshdesk API")
+
+    rl_remaining = r.headers.get("X-RateLimit-Remaining")
+    rl_total = r.headers.get("X-RateLimit-Total")
+    retry_after = r.headers.get("Retry-After")
+
+    if r.status_code == 429:
+        wait_seconds = None
+        wait_str = "try again later"
+        if retry_after:
+            try:
+                wait_seconds = int(retry_after)
+                minutes = math.ceil(wait_seconds / 60)
+                wait_str = f"in {minutes} minute{'s' if minutes != 1 else ''}"
+            except ValueError:
+                wait_str = f"after {retry_after}"
+        return {
+            "status": "rate_limited",
+            "remaining": 0,
+            "total": int(rl_total) if rl_total else 5000,
+            "retry_after_seconds": wait_seconds,
+            "message": f"Freshdesk API rate limit reached — try again {wait_str}.",
+        }
+
+    return {
+        "status": "ok",
+        "remaining": int(rl_remaining) if rl_remaining else None,
+        "total": int(rl_total) if rl_total else 5000,
+        "retry_after_seconds": None,
+        "message": None,
+    }

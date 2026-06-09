@@ -15,6 +15,7 @@ class Platform(Base):
     logo_url = Column(String, nullable=True)
     cms_url = Column(String, nullable=True)
     is_global = Column(Boolean, default=False, nullable=False, server_default="0")
+    location_rules = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     faq_documents = relationship("FAQDocument", back_populates="platform")
@@ -42,6 +43,7 @@ class User(Base):
     monthly_cost_month = Column(String(7), nullable=True)  # YYYY-MM
     api_key = Column(String, unique=True, nullable=True)
     freshdesk_api_key = Column(String, nullable=True)
+    is_superadmin = Column(Boolean, default=False, nullable=False, server_default='0')
     ticket_logs = relationship("TicketLog", back_populates="user")
     daily_update_reports = relationship("DailyUpdateReport", back_populates="user")
 
@@ -135,3 +137,19 @@ class TrackerComment(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User")
+
+
+class CannedResponse(Base):
+    __tablename__ = "canned_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    freshdesk_id = Column(Integer, unique=True, nullable=False, index=True)
+    freshdesk_folder_id = Column(Integer, nullable=False)
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    platform_id = Column(Integer, ForeignKey("platforms.id"), nullable=True)  # NULL = all platforms
+    content_html = Column(Text, nullable=True)
+    embedding = Column(LargeBinary, nullable=True)
+    synced_at = Column(DateTime, default=datetime.utcnow)
+
+    platform = relationship("Platform")
